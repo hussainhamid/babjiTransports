@@ -1,0 +1,15 @@
+/* .home {
+  max-width: 1400px;
+  margin: auto;
+  padding: 40px 20px;
+}
+
+.home h1 {
+  margin-bottom: 30px;
+}
+
+.vehicle-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 30px;
+} */
