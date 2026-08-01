@@ -33,12 +33,16 @@ enum Transmission {
 model Vehicle {
   id String @id @default(cuid())
 
-  category VehicleCategory
-
-  brand String
-  model String
+  ownerId String
+  owner   User   @relation(fields: [ownerId], references: [id])
 
   vehicleName String
+
+  brand String
+
+  model String
+
+  category VehicleCategory
 
   fuelType FuelType
 
@@ -48,19 +52,163 @@ model Vehicle {
 
   loadCapacity String?
 
-  pricePerKm Float
-
-  minimumFare Float
-
   city String
 
   image String
 
-  driverName String
+  pricePerKm Float
 
-  driverPhone String
+  minimumFare Float
 
   isAvailable Boolean @default(true)
+
+  bookings Booking[]
+
+  createdAt DateTime @default(now())
+
+  updatedAt DateTime @updatedAt
+}
+
+enum Role {
+  ADMIN
+  OWNER
+  DRIVER
+  CUSTOMER
+}
+
+model User {
+  id    String  @id @default(cuid())
+  name  String
+  phone String  @unique
+  email String?
+  role  Role
+
+  isVerified Boolean @default(false)
+  isActive   Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  ownedVehicles  Vehicle[]
+  assignedTrips  Booking[]     @relation("AssignedDriver")
+  customerTrips  Booking[]     @relation("CustomerBookings")
+  managedDrivers DriverOwner[] @relation("OwnerRelation")
+  owners         DriverOwner[] @relation("DriverRelation")
+  bookings       Booking[]
+}
+
+model DriverOwner {
+  id String @id @default(cuid())
+
+  ownerId  String
+  driverId String
+
+  owner  User @relation("OwnerRelation", fields: [ownerId], references: [id])
+  driver User @relation("DriverRelation", fields: [driverId], references: [id])
+
+  isActive Boolean @default(true)
+
+  joinedAt DateTime @default(now())
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([ownerId, driverId])
+}
+
+enum BookingStatus {
+  PENDING
+
+  DRIVER_ASSIGNED
+
+  CONFIRMED
+
+  ONGOING
+
+  COMPLETED
+
+  CANCELLED
+}
+
+model Booking {
+  id String @id @default(cuid())
+
+  customerId String
+  customer   User   @relation("CustomerBookings", fields: [customerId], references: [id])
+
+  driverId String?
+  driver   User?   @relation("AssignedDriver", fields: [driverId], references: [id])
+
+  vehicleId String
+  vehicle   Vehicle @relation(fields: [vehicleId], references: [id])
+
+  pickupLocation String
+
+  destination String
+
+  bookingDate DateTime
+
+  estimatedFare Float
+
+  advancePaid Float
+
+  remainingAmount Float
+
+  status BookingStatus @default(PENDING)
+
+  payment Payment?
+
+  invoice Invoice?
+
+  createdAt DateTime @default(now())
+
+  updatedAt DateTime @updatedAt
+  user      User?    @relation(fields: [userId], references: [id])
+  userId    String?
+}
+
+model Payment {
+  id String @id @default(cuid())
+
+  bookingId String @unique
+
+  booking Booking @relation(fields: [bookingId], references: [id])
+
+  razorpayOrderId String?
+
+  razorpayPaymentId String?
+
+  advanceAmount Float
+
+  finalAmount Float?
+
+  companyCommission Float
+
+  driverAmount Float
+
+  status String
+
+  createdAt DateTime @default(now())
+}
+
+model Invoice {
+  id String @id @default(cuid())
+
+  bookingId String @unique
+
+  booking Booking @relation(fields: [bookingId], references: [id])
+
+  fuelCost Float @default(0)
+
+  tollCost Float @default(0)
+
+  parkingCost Float @default(0)
+
+  fineCost Float @default(0)
+
+  otherCost Float @default(0)
+
+  totalAmount Float
 
   createdAt DateTime @default(now())
 }

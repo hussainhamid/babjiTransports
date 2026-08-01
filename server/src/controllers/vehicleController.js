@@ -18,7 +18,7 @@ const uploadToCloudinary = (fileBuffer) => {
   });
 };
 
-async function createVehicle(req, res) {
+export async function createVehicle(req, res) {
   try {
     const uploadResult = await uploadToCloudinary(req.file.buffer);
 
@@ -52,7 +52,7 @@ async function createVehicle(req, res) {
   }
 }
 
-async function getLatestVehicles(req, res) {
+export async function getLatestVehicles(req, res) {
   try {
     const vehicles = await prisma.vehicle.findMany({
       orderBy: {
@@ -70,4 +70,8 @@ async function getLatestVehicles(req, res) {
   }
 }
 
-export { createVehicle, getLatestVehicles };
+export async function getVehicleById(req, res) {}
+
+export async function updateVehicle(req, res) {}
+
+export async function deleteVehicle(req, res) {}

@@ -15,8 +15,8 @@ const initialState = {
   minimumFare: "",
   city: "",
   image: null,
-  driverName: "",
-  driverPhone: "",
+  ownerName: "",
+  ownerPhone: "",
 };
 
 const VehicleForm = () => {
@@ -252,18 +252,18 @@ const VehicleForm = () => {
         )}
       </div>
 
-      {/* Driver */}
+      {/* Owner */}
 
       <div className="bg-white rounded-2xl shadow-md p-8">
-        <h2 className="text-2xl font-bold mb-6">Driver Information</h2>
+        <h2 className="text-2xl font-bold mb-6">Owner Information</h2>
 
         <div className="grid md:grid-cols-2 gap-6">
           <input
             className="border rounded-xl p-3"
-            placeholder="Driver Name"
+            placeholder="Owner Name"
             type="text"
-            name="driverName"
-            value={formData.driverName}
+            name="ownerName"
+            value={formData.ownerName}
             onChange={handleChange}
           />
 
@@ -271,8 +271,8 @@ const VehicleForm = () => {
             className="border rounded-xl p-3"
             placeholder="Phone Number"
             type="tel"
-            name="driverPhone"
-            value={formData.driverPhone}
+            name="ownerPhone"
+            value={formData.ownerPhone}
             onChange={handleChange}
           />
         </div>
