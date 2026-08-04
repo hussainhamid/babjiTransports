@@ -1,4 +1,5 @@
 import {
+  getOwnerDashboardStats,
   getOwners,
   getOwnerById,
   createOwner,
@@ -9,6 +10,16 @@ import {
   assignDriver,
   unassignDriver,
 } from "../queries/ownerQueries/ownerQueries.js";
+
+export async function getOwnerDashboard(req, res) {
+  try {
+    const stats = await getOwnerDashboardStats(req.params.ownerId);
+    return res.status(200).json(stats);
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ message: "Unable to fetch owner dashboard" });
+  }
+}
 
 export async function getAllOwners(req, res) {
   try {
@@ -103,9 +114,8 @@ export async function getOwnerVehicles(req, res) {
 export async function assignDriverToBooking(req, res) {
   try {
     const { ownerId, bookingId } = req.params;
-
     const { driverId } = req.body;
-    const booking = await assignDriver(req.params.id, bookingId, driverId);
+    const booking = await assignDriver(ownerId, bookingId, driverId);
     return res.status(200).json(booking);
   } catch (err) {
     console.error(err);
@@ -117,9 +127,9 @@ export async function assignDriverToBooking(req, res) {
 
 export async function unassignDriverFromBooking(req, res) {
   try {
-    const { bookingId } = req.body;
+    const { bookingId } = req.params;
 
-    const booking = await unassignDriver(req.params.id, bookingId);
+    const booking = await unassignDriver(bookingId);
     return res.status(200).json(booking);
   } catch (err) {
     console.error(err);

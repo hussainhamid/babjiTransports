@@ -9,18 +9,12 @@ export async function getDashboardStats() {
     totalBookings,
     totalPayments,
   ] = await Promise.all([
-    prisma.User.count({
-      where: { role: "DRIVER" },
-    }),
-    prisma.User.count({
-      where: { role: "CUSTOMER" },
-    }),
-    prisma.User.count({
-      where: { role: "OWNER" },
-    }),
-    prisma.Vehicle.count(),
-    prisma.Booking.count(),
-    prisma.Payment.count(),
+    prisma.user.count({ where: { role: "DRIVER" } }),
+    prisma.user.count({ where: { role: "CUSTOMER" } }),
+    prisma.user.count({ where: { role: "OWNER" } }),
+    prisma.vehicle.count(),
+    prisma.booking.count(),
+    prisma.payment.count(),
   ]);
 
   return {

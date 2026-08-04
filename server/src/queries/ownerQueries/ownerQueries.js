@@ -1,5 +1,49 @@
 import prisma from "../../prisma/prisma.js";
 
+export async function getOwnerDashboardStats(ownerId) {
+  const [totalVehicles, availableVehicles, totalDrivers, vehicles] =
+    await Promise.all([
+      prisma.vehicle.count({ where: { ownerId } }),
+      prisma.vehicle.count({ where: { ownerId, isAvailable: true } }),
+      prisma.driverOwner.count({ where: { ownerId, isActive: true } }),
+      prisma.vehicle.findMany({ where: { ownerId }, select: { id: true } }),
+    ]);
+
+  const vehicleIds = vehicles.map((v) => v.id);
+
+  const [totalBookings, activeBookings, revenue, recentBookings] =
+    await Promise.all([
+      prisma.booking.count({ where: { vehicleId: { in: vehicleIds } } }),
+      prisma.booking.count({
+        where: {
+          vehicleId: { in: vehicleIds },
+          status: { in: ["CONFIRMED", "DRIVER_ASSIGNED", "ONGOING"] },
+        },
+      }),
+      prisma.booking.aggregate({
+        where: { vehicleId: { in: vehicleIds }, status: "COMPLETED" },
+        _sum: { advancePaid: true, remainingAmount: true },
+      }),
+      prisma.booking.findMany({
+        where: { vehicleId: { in: vehicleIds } },
+        take: 5,
+        orderBy: { createdAt: "desc" },
+        include: { vehicle: true, customer: true, driver: true },
+      }),
+    ]);
+
+  return {
+    totalVehicles,
+    availableVehicles,
+    totalDrivers,
+    totalBookings,
+    activeBookings,
+    totalRevenue:
+      (revenue._sum.advancePaid || 0) + (revenue._sum.remainingAmount || 0),
+    recentBookings,
+  };
+}
+
 export async function getOwners(page = 1, limit = 10) {
   const skip = (page - 1) * limit;
 

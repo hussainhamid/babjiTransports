@@ -1,6 +1,7 @@
 import { Router } from "express";
 
 import {
+  getOwnerDashboard,
   getAllOwners,
   getOwner,
   createNewOwner,
@@ -14,6 +15,7 @@ import {
 
 const router = Router();
 
+router.get("/:ownerId/dashboard", getOwnerDashboard);
 router.get("/", getAllOwners);
 router.get("/:ownerId", getOwner);
 router.post("/", createNewOwner);
