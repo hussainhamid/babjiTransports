@@ -1,3 +1,4 @@
+import { useAuth } from "../../context/AuthContext";
 import { useState } from "react";
 import { Upload, CarFront, Truck, IndianRupee } from "lucide-react";
 import { addVehicle } from "../../services/vehicleServices";
@@ -20,38 +21,42 @@ const initialState = {
 };
 
 const VehicleForm = () => {
+  const { user, setSession } = useAuth();
   const [formData, setFormData] = useState(initialState);
   const [loading, setLoading] = useState(false);
 
   const handleChange = (e) => {
     const { name, value, files } = e.target;
-
-    setFormData((prev) => ({
-      ...prev,
-      [name]: files ? files[0] : value,
-    }));
+    setFormData((prev) => ({ ...prev, [name]: files ? files[0] : value }));
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-
     try {
       setLoading(true);
-
       const data = new FormData();
 
       Object.entries(formData).forEach(([key, value]) => {
+        if ((key === "ownerName" || key === "ownerPhone") && user) return; // skip if already logged in
         data.append(key, value);
       });
 
-      await addVehicle(data);
+      const { data: response } = await addVehicle(data);
+
+      if (response.token) {
+        setSession(response.token, {
+          id: response.vehicle.ownerId,
+          name: formData.ownerName,
+          phone: formData.ownerPhone,
+          role: "OWNER",
+        });
+      }
 
       alert("Vehicle added successfully!");
-
       setFormData(initialState);
     } catch (err) {
       console.error(err);
-      alert("Unable to add vehicle");
+      alert(err.response?.data?.message || "Unable to add vehicle");
     } finally {
       setLoading(false);
     }
@@ -253,30 +258,31 @@ const VehicleForm = () => {
       </div>
 
       {/* Owner */}
+      {!user && (
+        <div className="bg-white rounded-2xl shadow-md p-8">
+          <h2 className="text-2xl font-bold mb-6">Owner Information</h2>
 
-      <div className="bg-white rounded-2xl shadow-md p-8">
-        <h2 className="text-2xl font-bold mb-6">Owner Information</h2>
+          <div className="grid md:grid-cols-2 gap-6">
+            <input
+              className="border rounded-xl p-3"
+              placeholder="Owner Name"
+              type="text"
+              name="ownerName"
+              value={formData.ownerName}
+              onChange={handleChange}
+            />
 
-        <div className="grid md:grid-cols-2 gap-6">
-          <input
-            className="border rounded-xl p-3"
-            placeholder="Owner Name"
-            type="text"
-            name="ownerName"
-            value={formData.ownerName}
-            onChange={handleChange}
-          />
-
-          <input
-            className="border rounded-xl p-3"
-            placeholder="Phone Number"
-            type="tel"
-            name="ownerPhone"
-            value={formData.ownerPhone}
-            onChange={handleChange}
-          />
+            <input
+              className="border rounded-xl p-3"
+              placeholder="Phone Number"
+              type="tel"
+              name="ownerPhone"
+              value={formData.ownerPhone}
+              onChange={handleChange}
+            />
+          </div>
         </div>
-      </div>
+      )}
 
       <button
         disabled={loading}

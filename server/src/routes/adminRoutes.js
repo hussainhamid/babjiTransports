@@ -37,9 +37,18 @@ import {
   activateCustomer,
   activateOwner,
   activateDriver,
+  reactivateVehicle,
+  restorePayment,
 } from "../controllers/adminController.js";
 
+import { protect } from "../middleware/auth.js";
+import { authorize } from "../middleware/role.js";
+
+import upload from "../middleware/upload.js";
+
 const router = Router();
+
+router.use(protect, authorize("ADMIN"));
 
 router.get("/dashboard", getDashboard);
 
@@ -69,8 +78,8 @@ router.post("/customers", createCustomer);
 router.put("/customers/:id", updateCustomer);
 router.delete("/customers/:id", deleteCustomer);
 
-router.post("/vehicles", createVehicle);
-router.put("/vehicles/:id", updateVehicle);
+router.post("/vehicles", upload.single("image"), createVehicle);
+router.put("/vehicles/:id", upload.single("image"), updateVehicle);
 router.delete("/vehicles/:id", deleteVehicle);
 
 router.post("/bookings", createBooking);
@@ -90,5 +99,8 @@ router.delete("/owners/:id", deleteOwner);
 router.put("/customers/:id/activate", activateCustomer);
 router.put("/owners/:id/activate", activateOwner);
 router.put("/drivers/:id/activate", activateDriver);
+
+router.put("/vehicles/:id/activate", reactivateVehicle);
+router.put("/payments/:id/restore", restorePayment);
 
 export default router;

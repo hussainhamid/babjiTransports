@@ -11,6 +11,9 @@ import {
   getOwnerVehicles,
   assignDriverToBooking,
   unassignDriverFromBooking,
+  getBookingsForOwner,
+  quoteBookingFare,
+  addDriver,
 } from "../controllers/ownerController.js";
 
 const router = Router();
@@ -31,5 +34,8 @@ router.post(
   "/:ownerId/bookings/:bookingId/unassign-driver",
   unassignDriverFromBooking,
 );
+router.get("/:ownerId/bookings", getBookingsForOwner);
+router.post("/:ownerId/drivers", addDriver);
+router.post("/:ownerId/bookings/:bookingId/quote", quoteBookingFare);
 
 export default router;

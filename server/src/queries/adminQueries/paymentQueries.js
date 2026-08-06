@@ -35,7 +35,6 @@ export async function getPayments(page = 1, limit = 10, voided = false) {
     },
   };
 }
-
 export async function getPaymentById(paymentId) {
   return prisma.payment.findUnique({
     where: { id: paymentId },
@@ -97,5 +96,12 @@ export async function editPayment(paymentId, data) {
       ...(driverAmount !== undefined && { driverAmount }),
       ...(status !== undefined && { status }),
     },
+  });
+}
+
+export async function restorePayment(paymentId) {
+  return prisma.payment.update({
+    where: { id: paymentId },
+    data: { isVoided: false },
   });
 }

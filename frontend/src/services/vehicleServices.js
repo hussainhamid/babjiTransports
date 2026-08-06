@@ -7,3 +7,5 @@ export const addVehicle = async (vehicleData) => {
 export const getVehicles = () => {
   return api.get("/vehicles");
 };
+
+export const getVehicleById = (id) => api.get(`/vehicles/${id}`);

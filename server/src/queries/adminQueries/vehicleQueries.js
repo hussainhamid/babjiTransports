@@ -1,10 +1,21 @@
 import prisma from "../../prisma/prisma.js";
 
-export async function getVehicles(page = 1, limit = 10) {
+export async function getVehicles(page = 1, limit = 10, search) {
   const skip = (page - 1) * limit;
+  const where = search
+    ? {
+        OR: [
+          { vehicleName: { contains: search, mode: "insensitive" } },
+          { brand: { contains: search, mode: "insensitive" } },
+          { model: { contains: search, mode: "insensitive" } },
+          { city: { contains: search, mode: "insensitive" } },
+        ],
+      }
+    : {};
 
   const [vehicles, totalVehicles] = await Promise.all([
     prisma.vehicle.findMany({
+      where,
       skip,
       take: limit,
       orderBy: { createdAt: "desc" },
@@ -13,7 +24,7 @@ export async function getVehicles(page = 1, limit = 10) {
         _count: { select: { bookings: true } },
       },
     }),
-    prisma.vehicle.count(),
+    prisma.vehicle.count({ where }),
   ]);
 
   return {
@@ -25,6 +36,13 @@ export async function getVehicles(page = 1, limit = 10) {
       limit,
     },
   };
+}
+
+export async function reactivateVehicle(vehicleId) {
+  return prisma.vehicle.update({
+    where: { id: vehicleId },
+    data: { isAvailable: true },
+  });
 }
 
 export async function getVehicleById(vehicleId) {
@@ -110,7 +128,7 @@ export async function updateVehicle(vehicleId, vehicleData) {
       ...(seats !== undefined && { seats }),
       ...(loadCapacity !== undefined && { loadCapacity }),
       ...(city !== undefined && { city }),
-      ...(image !== undefined && { image }),
+      ...(image !== undefined && { image }), // only touched if a new URL is passed in
       ...(pricePerKm !== undefined && { pricePerKm }),
       ...(minimumFare !== undefined && { minimumFare }),
       ...(isAvailable !== undefined && { isAvailable }),

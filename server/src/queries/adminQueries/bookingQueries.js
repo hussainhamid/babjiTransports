@@ -5,11 +5,20 @@ export async function getBookings(
   limit = 10,
   status,
   archived = false,
+  search,
 ) {
   const skip = (page - 1) * limit;
   const where = {
     isArchived: archived,
     ...(status && { status }),
+    ...(search && {
+      OR: [
+        { pickupLocation: { contains: search, mode: "insensitive" } },
+        { destination: { contains: search, mode: "insensitive" } },
+        { customer: { name: { contains: search, mode: "insensitive" } } },
+        { customer: { phone: { contains: search } } },
+      ],
+    }),
   };
 
   const [bookings, totalBookings] = await Promise.all([
@@ -75,9 +84,11 @@ export async function createBooking(bookingData) {
       pickupLocation,
       destination,
       bookingDate: new Date(bookingDate),
-      estimatedFare,
-      advancePaid,
-      remainingAmount,
+      estimatedFare:
+        estimatedFare !== undefined ? Number(estimatedFare) : undefined,
+      advancePaid: advancePaid !== undefined ? Number(advancePaid) : undefined,
+      remainingAmount:
+        remainingAmount !== undefined ? Number(remainingAmount) : undefined,
     },
   });
 }

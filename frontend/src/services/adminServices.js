@@ -38,12 +38,17 @@ export const updateAdminDriver = (id, data) =>
 export const deactivateAdminDriver = (id) => api.delete(`/admin/drivers/${id}`);
 
 // Vehicles
-export const getAdminVehicles = (page = 1, limit = 10) =>
-  api.get(`/admin/vehicles?page=${page}&limit=${limit}`);
+export const getAdminVehicles = (page = 1, limit = 10, search = "") =>
+  api.get(
+    `/admin/vehicles?page=${page}&limit=${limit}${search ? `&search=${encodeURIComponent(search)}` : ""}`,
+  );
+export const reactivateAdminVehicle = (id) =>
+  api.put(`/admin/vehicles/${id}/activate`);
 export const getAdminVehicleById = (id) => api.get(`/admin/vehicles/${id}`);
-export const createAdminVehicle = (data) => api.post("/admin/vehicles", data);
-export const updateAdminVehicle = (id, data) =>
-  api.put(`/admin/vehicles/${id}`, data);
+export const createAdminVehicle = (formData) =>
+  api.post("/admin/vehicles", formData);
+export const updateAdminVehicle = (id, formData) =>
+  api.put(`/admin/vehicles/${id}`, formData);
 export const deleteAdminVehicle = (id) => api.delete(`/admin/vehicles/${id}`);
 
 // Bookings
@@ -52,9 +57,10 @@ export const getAdminBookings = (
   limit = 10,
   status,
   archived = false,
+  search = "",
 ) =>
   api.get(
-    `/admin/bookings?page=${page}&limit=${limit}${status ? `&status=${status}` : ""}&archived=${archived}`,
+    `/admin/bookings?page=${page}&limit=${limit}${status ? `&status=${status}` : ""}&archived=${archived}${search ? `&search=${encodeURIComponent(search)}` : ""}`,
   );
 export const getAdminBookingById = (id) => api.get(`/admin/bookings/${id}`);
 export const createAdminBooking = (data) => api.post("/admin/bookings", data);
@@ -74,6 +80,8 @@ export const updateAdminPayment = (id, data) =>
 export const refundAdminPayment = (id) =>
   api.put(`/admin/payments/${id}/refund`);
 export const voidAdminPayment = (id) => api.delete(`/admin/payments/${id}`);
+export const restoreAdminPayment = (id) =>
+  api.put(`/admin/payments/${id}/restore`);
 
 export const activateAdminCustomer = (id) =>
   api.put(`/admin/customers/${id}/activate`);

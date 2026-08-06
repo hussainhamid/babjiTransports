@@ -150,11 +150,11 @@ model Booking {
 
   bookingDate DateTime
 
-  estimatedFare Float
+  estimatedFare Float?
 
-  advancePaid Float
+  advancePaid Float?
 
-  remainingAmount Float
+  remainingAmount Float?
 
   status BookingStatus @default(PENDING)
 

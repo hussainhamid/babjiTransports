@@ -3,48 +3,52 @@ import cloudinary from "../config/cloudinary.js";
 import streamifier from "streamifier";
 import { createVehicle as createVehicleQuery } from "../queries/adminQueries/vehicleQueries.js";
 
-const uploadToCloudinary = (fileBuffer) => {
-  return new Promise((resolve, reject) => {
-    const stream = cloudinary.uploader.upload_stream(
-      {
-        folder: "babji-transports",
-      },
-      (error, result) => {
-        if (error) return reject(error);
-        resolve(result);
-      },
-    );
+import { uploadToCloudinary } from "../utils/cloudinaryUpload.js";
 
-    streamifier.createReadStream(fileBuffer).pipe(stream);
-  });
-};
+import { generateToken } from "../utils/jwt.js";
+import { normalizePhone } from "../utils/normalizePhone.js";
 
 export async function createVehicle(req, res) {
   try {
-    if (!req.body.ownerPhone || !req.body.ownerName) {
-      return res
-        .status(400)
-        .json({ message: "ownerName and ownerPhone are required" });
-    }
     if (!req.file) {
       return res.status(400).json({ message: "Vehicle image is required" });
     }
 
-    const uploadResult = await uploadToCloudinary(req.file.buffer);
+    let owner;
+    let token; // only set for brand-new owners — tells the frontend "save this"
+    const phoneNo = normalizePhone(req.body.phone);
 
-    let owner = await prisma.user.findUnique({
-      where: { phone: req.body.ownerPhone },
-    });
+    if (req.user) {
+      // Already has a token from a previous visit — trust it, ignore any name/phone in the body.
+      owner = await prisma.user.findUnique({ where: { id: req.user.id } });
+      if (!owner)
+        return res.status(404).json({ message: "Owner account not found" });
+    } else {
+      // First-time visitor — need name + phone to find or create the account.
+      if (!req.body.ownerName || !phoneNo) {
+        return res
+          .status(400)
+          .json({ message: "ownerName and ownerPhone are required" });
+      }
 
-    if (!owner) {
-      owner = await prisma.user.create({
-        data: {
-          name: req.body.ownerName,
-          phone: req.body.ownerPhone,
-          role: "OWNER",
-        },
+      owner = await prisma.user.findUnique({
+        where: { phone: phoneNo },
       });
+
+      if (!owner) {
+        owner = await prisma.user.create({
+          data: {
+            name: req.body.ownerName,
+            phone: phoneNo,
+            role: "OWNER",
+          },
+        });
+      }
+
+      token = generateToken(owner);
     }
+
+    const uploadResult = await uploadToCloudinary(req.file.buffer);
 
     const vehicle = await prisma.vehicle.create({
       data: {
@@ -68,7 +72,7 @@ export async function createVehicle(req, res) {
       },
     });
 
-    return res.status(201).json(vehicle);
+    return res.status(201).json({ vehicle, token }); // `token` is omitted/undefined for returning owners
   } catch (error) {
     console.error(error);
     return res.status(500).json({ message: "Failed to create vehicle" });

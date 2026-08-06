@@ -35,6 +35,7 @@ import {
   voidPayment as voidPaymentQuery,
   refundPayment as refundPaymentQuery,
   editPayment as editPaymentQuery,
+  restorePayment as restorePaymentQuery,
 } from "../queries/adminQueries/paymentQueries.js";
 import {
   getOwners as getOwnersQuery,
@@ -46,6 +47,8 @@ import {
 import { activateCustomer as activateCustomerQuery } from "../queries/adminQueries/customerQueries.js";
 import { activateOwner as activateOwnerQuery } from "../queries/adminQueries/ownerQueries.js";
 import { activateDriver as activateDriverQuery } from "../queries/adminQueries/driverQueries.js";
+import { uploadToCloudinary } from "../utils/cloudinaryUpload.js";
+import { normalizePhone } from "../utils/normalizePhone.js";
 
 export async function getDashboard(req, res) {
   try {
@@ -110,7 +113,7 @@ export async function getVehicles(req, res) {
   try {
     const page = Number(req.query.page) || 1;
     const limit = Number(req.query.limit) || 10;
-    const vehicles = await getVehiclesQuery(page, limit);
+    const vehicles = await getVehiclesQuery(page, limit, req.query.search);
     return res.status(200).json(vehicles);
   } catch (err) {
     console.error(err);
@@ -135,13 +138,20 @@ export async function getBookings(req, res) {
     const limit = Number(req.query.limit) || 10;
     const status = req.query.status;
     const archived = req.query.archived === "true";
-    const bookings = await getBookingsQuery(page, limit, status, archived);
+    const bookings = await getBookingsQuery(
+      page,
+      limit,
+      status,
+      archived,
+      req.query.search,
+    );
     return res.status(200).json(bookings);
   } catch (err) {
     console.error(err);
     return res.status(500).json({ message: "Unable to fetch bookings" });
   }
 }
+
 export async function getBookingById(req, res) {
   try {
     const booking = await getBookingByIdQuery(req.params.id);
@@ -158,7 +168,12 @@ export async function getPayments(req, res) {
     const page = Number(req.query.page) || 1;
     const limit = Number(req.query.limit) || 10;
     const voided = req.query.voided === "true";
-    const payments = await getPaymentsQuery(page, limit, voided);
+    const payments = await getPaymentsQuery(
+      page,
+      limit,
+      voided,
+      req.query.search,
+    );
     return res.status(200).json(payments);
   } catch (err) {
     console.error(err);
@@ -203,7 +218,8 @@ export async function getOwnerById(req, res) {
 
 export async function createDriver(req, res) {
   try {
-    const { name, phone } = req.body;
+    const { name } = req.body;
+    const phone = normalizePhone(req.body.phone);
     if (!name || !phone)
       return res.status(400).json({ message: "name and phone are required" });
     const driver = await createDriverQuery(req.body);
@@ -240,7 +256,8 @@ export async function deleteDriver(req, res) {
 
 export async function createCustomer(req, res) {
   try {
-    const { name, phone } = req.body;
+    const { name } = req.body;
+    const phone = normalizePhone(req.body.phone);
     if (!name || !phone)
       return res.status(400).json({ message: "name and phone are required" });
     const customer = await createCustomerQuery(req.body);
@@ -277,27 +294,45 @@ export async function deleteCustomer(req, res) {
 
 export async function createVehicle(req, res) {
   try {
-    const { name, phone } = req.body;
-    if (!name || !phone)
-      return res.status(400).json({ message: "name and phone are required" });
-    const vehicle = await createVehicleQuery(req.body);
+    if (!req.body.ownerId) {
+      return res.status(400).json({ message: "ownerId is required" });
+    }
+    if (!req.file) {
+      return res.status(400).json({ message: "Vehicle image is required" });
+    }
+
+    const uploadResult = await uploadToCloudinary(req.file.buffer);
+
+    const vehicle = await createVehicleQuery({
+      ...req.body,
+      seats:
+        req.body.category === "PASSENGER" ? Number(req.body.seats) : undefined,
+      pricePerKm: Number(req.body.pricePerKm),
+      minimumFare: Number(req.body.minimumFare),
+      image: uploadResult.secure_url,
+    });
     return res.status(201).json(vehicle);
   } catch (err) {
     console.error(err);
-    if (err.code === "P2002")
-      return res
-        .status(409)
-        .json({ message: "Phone number already registered" });
     return res.status(500).json({ message: "Unable to create vehicle" });
   }
 }
 
 export async function updateVehicle(req, res) {
   try {
-    const vehicle = await updateVehicleQuery(req.params.id, req.body);
+    const updateData = { ...req.body };
+
+    if (req.file) {
+      const uploadResult = await uploadToCloudinary(req.file.buffer);
+      updateData.image = uploadResult.secure_url;
+    }
+
+    const vehicle = await updateVehicleQuery(req.params.id, updateData);
     return res.status(200).json(vehicle);
   } catch (err) {
     console.error(err);
+    if (err.code === "P2025")
+      return res.status(404).json({ message: "Vehicle not found" });
     return res.status(500).json({ message: "Unable to update vehicle" });
   }
 }
@@ -311,32 +346,38 @@ export async function deleteVehicle(req, res) {
     return res.status(500).json({ message: "Unable to deactivate vehicle" });
   }
 }
+export async function reactivateVehicle(req, res) {
+  try {
+    const vehicle = await reactivateVehicleQuery(req.params.id);
+    return res
+      .status(200)
+      .json({ message: "Vehicle marked available", vehicle });
+  } catch (err) {
+    console.error(err);
+    if (err.code === "P2025")
+      return res.status(404).json({ message: "Vehicle not found" });
+    return res.status(500).json({ message: "Unable to update vehicle" });
+  }
+}
 
 export async function createBooking(req, res) {
   try {
-    const {
-      customerId,
-      vehicleId,
-      pickupLocation,
-      destination,
-      bookingDate,
-      estimatedFare,
-      advancePaid,
-      remainingAmount,
-    } = req.body;
+    const { customerId, vehicleId, pickupLocation, destination, bookingDate } =
+      req.body;
 
     if (
       !customerId ||
       !vehicleId ||
       !pickupLocation ||
       !destination ||
-      !bookingDate ||
-      estimatedFare === undefined
+      !bookingDate
     ) {
-      return res.status(400).json({
-        message:
-          "customerId, vehicleId, pickupLocation, destination, bookingDate and estimatedFare are required",
-      });
+      return res
+        .status(400)
+        .json({
+          message:
+            "customerId, vehicleId, pickupLocation, destination and bookingDate are required",
+        });
     }
 
     const booking = await createBookingQuery(req.body);
@@ -456,7 +497,8 @@ export async function editPayment(req, res) {
 
 export async function createOwner(req, res) {
   try {
-    const { name, phone } = req.body;
+    const { name } = req.body;
+    const phone = normalizePhone(req.body.phone);
     if (!name || !phone)
       return res.status(400).json({ message: "name and phone are required" });
 
@@ -529,5 +571,17 @@ export async function activateDriver(req, res) {
     if (err.code === "P2025")
       return res.status(404).json({ message: "Driver not found" });
     return res.status(500).json({ message: "Unable to activate driver" });
+  }
+}
+
+export async function restorePayment(req, res) {
+  try {
+    const payment = await restorePaymentQuery(req.params.id);
+    return res.status(200).json({ message: "Payment restored", payment });
+  } catch (err) {
+    console.error(err);
+    if (err.code === "P2025")
+      return res.status(404).json({ message: "Payment not found" });
+    return res.status(500).json({ message: "Unable to restore payment" });
   }
 }

@@ -1,20 +1,25 @@
 import { Router } from "express";
+import { protect } from "../middleware/auth.js";
 
 import {
   createBooking,
-  cancelBooking,
+  getBookingDetail,
+  updateBookingDetail,
+  assignDriverToBooking,
+  payAdvance,
   completeBooking,
-  getBookings,
+  updateInvoice,
 } from "../controllers/bookingController.js";
+import { attachUserIfPresent } from "../middleware/auth.js";
 
 const router = Router();
 
-router.post("/", createBooking);
-
-router.get("/", getBookings);
-
-router.put("/:id/cancel", cancelBooking);
-
-router.put("/:id/complete", completeBooking);
+router.post("/", attachUserIfPresent, createBooking);
+router.get("/:id", protect, getBookingDetail);
+router.put("/:id", protect, updateBookingDetail);
+router.put("/:id/assign-driver", protect, assignDriverToBooking);
+router.put("/:id/pay-advance", protect, payAdvance);
+router.put("/:id/complete", protect, completeBooking);
+router.put("/:id/invoice", protect, updateInvoice);
 
 export default router;

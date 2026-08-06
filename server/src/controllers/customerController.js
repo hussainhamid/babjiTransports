@@ -85,3 +85,20 @@ export async function updateProfile(req, res) {
       .json({ message: "Unable to update customer profile" });
   }
 }
+
+export async function getMyProfile(req, res) {
+  req.params.customerId = req.user.id;
+  return getProfile(req, res);
+}
+export async function updateMyProfile(req, res) {
+  req.params.customerId = req.user.id;
+  return updateProfile(req, res);
+}
+export async function getMyDashboard(req, res) {
+  req.params.customerId = req.user.id;
+  return getDashboard(req, res);
+}
+export async function getMyBookings(req, res) {
+  req.params.customerId = req.user.id;
+  return getBookingHistory(req, res);
+}

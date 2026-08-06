@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { Plus, Search, CarFront, MapPinned, Clock3 } from "lucide-react";
 import { getVehicles } from "../../services/vehicleServices";
 import VehicleCard from "../../components/VehicleCard/VehicleCard";
+import { Link } from "react-router-dom";
 
 const Home = () => {
   const [vehicles, setVehicles] = useState([]);
@@ -30,16 +31,6 @@ const Home = () => {
         <div className="absolute inset-0 bg-black/10"></div>
 
         <div className="relative max-w-7xl mx-auto px-6 py-12 lg:py-14">
-          <div className="flex justify-end mb-6">
-            <button
-              onClick={() => navigate("/addVehicle")}
-              className="flex items-center gap-2 bg-white text-blue-700 hover:bg-blue-100 px-5 py-3 rounded-xl font-semibold shadow-lg transition"
-            >
-              <Plus size={18} />
-              Add Vehicle
-            </button>
-          </div>
-
           <div className="max-w-3xl">
             <h1 className="mt-6 text-4xl md:text-5xl font-extrabold leading-tight">
               Book Your Perfect Ride
@@ -128,6 +119,17 @@ const Home = () => {
           </div>
         )}
       </section>
+      <div className="relative max-w-7xl mx-auto px-6 py-12 lg:py-14">
+        <div className="flex justify-end mb-6">
+          <button
+            onClick={() => navigate("/addVehicle")}
+            className="flex items-center gap-2 bg-white text-blue-700 hover:bg-blue-100 px-5 py-3 rounded-xl font-semibold shadow-lg transition"
+          >
+            <Plus size={18} />
+            Add Vehicle
+          </button>
+        </div>
+      </div>
     </div>
   );
 };

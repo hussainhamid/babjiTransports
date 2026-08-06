@@ -9,6 +9,9 @@ import {
   getVehiclesByOwnerId,
   assignDriver,
   unassignDriver,
+  getOwnerBookings,
+  quoteBooking,
+  createAndAssignDriver,
 } from "../queries/ownerQueries/ownerQueries.js";
 
 export async function getOwnerDashboard(req, res) {
@@ -136,5 +139,50 @@ export async function unassignDriverFromBooking(req, res) {
     return res
       .status(500)
       .json({ message: "Unable to unassign driver from booking" });
+  }
+}
+
+export async function getBookingsForOwner(req, res) {
+  try {
+    const { ownerId } = req.params;
+    const page = Number(req.query.page) || 1;
+    const limit = Number(req.query.limit) || 10;
+    const bookings = await getOwnerBookings(
+      ownerId,
+      page,
+      limit,
+      req.query.status,
+    );
+    return res.status(200).json(bookings);
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ message: "Unable to fetch bookings" });
+  }
+}
+
+export async function quoteBookingFare(req, res) {
+  try {
+    const { ownerId, bookingId } = req.params;
+    const booking = await quoteBooking(ownerId, bookingId, req.body);
+    return res.status(200).json(booking);
+  } catch (err) {
+    console.error(err);
+    if (err.message === "NOT_FOUND")
+      return res.status(404).json({ message: "Booking not found" });
+    if (err.message === "FORBIDDEN")
+      return res
+        .status(403)
+        .json({ message: "This booking does not belong to your vehicle" });
+    return res.status(500).json({ message: "Unable to update booking" });
+  }
+}
+
+export async function addDriver(req, res) {
+  try {
+    const driver = await createAndAssignDriver(req.params.ownerId, req.body);
+    return res.status(201).json(driver);
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ message: "Unable to add driver" });
   }
 }

@@ -1,3 +1,4 @@
+import { useNavigate } from "react-router-dom";
 import {
   Fuel,
   MapPin,
@@ -8,6 +9,7 @@ import {
 } from "lucide-react";
 
 const VehicleCard = ({ vehicle }) => {
+  const navigate = useNavigate();
   return (
     <div className="group bg-white rounded-3xl overflow-hidden shadow-md hover:shadow-2xl transition duration-300">
       <div className="relative overflow-hidden">
@@ -76,7 +78,10 @@ const VehicleCard = ({ vehicle }) => {
           </div>
         </div>
 
-        <button className="mt-8 w-full bg-blue-600 hover:bg-blue-700 text-white py-4 rounded-xl font-semibold flex items-center justify-center gap-2">
+        <button
+          onClick={() => navigate(`/book/${vehicle.id}`)}
+          className="mt-8 w-full bg-blue-600 hover:bg-blue-700 text-white py-4 rounded-xl font-semibold flex items-center justify-center gap-2"
+        >
           Book Vehicle
           <ArrowRight size={18} />
         </button>
