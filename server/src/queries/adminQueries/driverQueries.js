@@ -3,7 +3,7 @@ import prisma from "../../prisma/prisma.js";
 export async function getDrivers(page = 1, limit = 10, search) {
   const skip = (page - 1) * limit;
   const where = {
-    role: "DRIVER",
+    driverFeePaid: true, // ← anyone who's paid to drive, regardless of their primary role
     ...(search && {
       OR: [
         { name: { contains: search, mode: "insensitive" } },
@@ -24,9 +24,13 @@ export async function getDrivers(page = 1, limit = 10, search) {
         name: true,
         phone: true,
         email: true,
+        role: true, // role kept — useful to show "this driver is also an OWNER"
         isVerified: true,
         isActive: true,
         createdAt: true,
+        driverFeePaid: true,
+        licenseNumber: true,
+        experienceYears: true,
         _count: { select: { ownedVehicles: true, assignedTrips: true } },
       },
     }),
@@ -53,10 +57,7 @@ export async function getDriverById(driverId) {
         orderBy: { createdAt: "desc" },
         include: { vehicle: true, customer: true },
       },
-      owners: {
-        where: { isActive: true },
-        include: { owner: true },
-      },
+      owners: { where: { isActive: true }, include: { owner: true } },
       _count: {
         select: {
           ownedVehicles: true,
@@ -75,14 +76,14 @@ export async function createDriver(driverData) {
       phone,
       email: email || null,
       role: "DRIVER",
-      isVerified: true,
-      isActive: true,
+      driverFeePaid: true,
     },
     select: {
       id: true,
       name: true,
       phone: true,
       email: true,
+      role: true,
       isVerified: true,
       isActive: true,
       createdAt: true,
@@ -92,12 +93,11 @@ export async function createDriver(driverData) {
 
 export async function updateDriver(driverId, driverData) {
   const { name, email } = driverData;
-
   return prisma.user.update({
     where: { id: driverId },
     data: {
       ...(name !== undefined && { name }),
-      ...(email !== undefined && { email }),
+      ...(email !== undefined && { email: email || null }),
     },
   });
 }

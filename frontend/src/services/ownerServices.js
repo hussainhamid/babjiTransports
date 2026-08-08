@@ -12,3 +12,9 @@ export const quoteBookingFare = (ownerId, bookingId, data) =>
   api.put(`/owners/${ownerId}/bookings/${bookingId}/quote`, data);
 export const addDriver = (ownerId, data) =>
   api.post(`/owners/${ownerId}/drivers`, data);
+export const browseVerifiedDrivers = (ownerId, search = "") =>
+  api.get(
+    `/owners/${ownerId}/available-drivers${search ? `?search=${encodeURIComponent(search)}` : ""}`,
+  );
+export const linkDriver = (ownerId, driverId) =>
+  api.post(`/owners/${ownerId}/drivers/link`, { driverId });

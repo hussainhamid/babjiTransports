@@ -21,10 +21,7 @@ export async function getOwnerDashboardStats(ownerId) {
           status: { in: ["CONFIRMED", "DRIVER_ASSIGNED", "ONGOING"] },
         },
       }),
-      prisma.booking.aggregate({
-        where: { vehicleId: { in: vehicleIds }, status: "COMPLETED" },
-        _sum: { advancePaid: true, remainingAmount: true },
-      }),
+
       prisma.booking.findMany({
         where: { vehicleId: { in: vehicleIds } },
         take: 5,
@@ -33,14 +30,18 @@ export async function getOwnerDashboardStats(ownerId) {
       }),
     ]);
 
+  const revenueResult = await prisma.payment.aggregate({
+    where: { booking: { vehicleId: { in: vehicleIds } } },
+    _sum: { amountPaid: true },
+  });
+
   return {
     totalVehicles,
     availableVehicles,
     totalDrivers,
     totalBookings,
     activeBookings,
-    totalRevenue:
-      (revenue._sum.advancePaid || 0) + (revenue._sum.remainingAmount || 0),
+    totalRevenue: revenueResult._sum.amountPaid || 0,
     recentBookings,
   };
 }
@@ -290,6 +291,7 @@ export async function getOwnerBookings(ownerId, page = 1, limit = 10, status) {
         customer: { select: { id: true, name: true, phone: true } },
         driver: { select: { id: true, name: true, phone: true } },
         vehicle: { select: { id: true, vehicleName: true } },
+        payment: true,
       },
     }),
     prisma.booking.count({ where }),
@@ -333,10 +335,14 @@ export async function quoteBooking(ownerId, bookingId, data) {
 export async function createAndAssignDriver(ownerId, { name, phone }) {
   const normalized = normalizePhone(phone);
   let driver = await prisma.user.findUnique({ where: { phone: normalized } });
+
   if (!driver) {
+    // Owner is vouching for someone brand new — trusted immediately, no separate verification needed.
     driver = await prisma.user.create({
-      data: { name, phone: normalized, role: "DRIVER" },
+      data: { name, phone: normalized, role: "DRIVER", isVerified: true },
     });
+  } else if (!driver.isVerified) {
+    throw new Error("NOT_VERIFIED");
   }
 
   await prisma.driverOwner.upsert({
@@ -344,6 +350,46 @@ export async function createAndAssignDriver(ownerId, { name, phone }) {
     update: { isActive: true },
     create: { ownerId, driverId: driver.id, isActive: true },
   });
-
   return driver;
+}
+
+// New — browse the pool of publicly-applied, admin-verified drivers not yet linked to this owner
+export async function getAvailableVerifiedDrivers(ownerId, search) {
+  const linked = await prisma.driverOwner.findMany({
+    where: { ownerId },
+    select: { driverId: true },
+  });
+  const linkedIds = linked.map((l) => l.driverId);
+
+  return prisma.user.findMany({
+    where: {
+      driverFeePaid: true, // ← the actual gate now, not role or isVerified
+      licenseNumber: { not: null },
+      id: { notIn: [...linkedIds, ownerId] }, // exclude already-linked drivers and the owner (they get "drive it myself" separately)
+      ...(search && {
+        OR: [
+          { name: { contains: search, mode: "insensitive" } },
+          { phone: { contains: search } },
+        ],
+      }),
+    },
+    select: {
+      id: true,
+      name: true,
+      phone: true,
+      city: true,
+      experienceYears: true,
+    },
+    take: 20,
+  });
+}
+
+export async function linkVerifiedDriver(ownerId, driverId) {
+  const driver = await prisma.user.findUnique({ where: { id: driverId } });
+  if (!driver || !driver.driverFeePaid) throw new Error("NOT_PAID");
+  return prisma.driverOwner.upsert({
+    where: { ownerId_driverId: { ownerId, driverId } },
+    update: { isActive: true },
+    create: { ownerId, driverId, isActive: true },
+  });
 }

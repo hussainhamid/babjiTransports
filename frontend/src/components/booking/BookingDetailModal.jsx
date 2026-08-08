@@ -7,8 +7,17 @@ import {
   assignDriver,
   payAdvance,
   completeBooking,
+  payFinalAmount,
+  updateInvoice,
+  updateTripEvent,
+  cancelBooking,
 } from "../../services/bookingServices";
-import { getOwnerDrivers, addDriver } from "../../services/ownerServices";
+import {
+  getOwnerDrivers,
+  addDriver,
+  browseVerifiedDrivers,
+  linkDriver,
+} from "../../services/ownerServices";
 
 const BookingDetailModal = ({ bookingId, onClose, onChanged }) => {
   const { user } = useAuth();
@@ -26,6 +35,16 @@ const BookingDetailModal = ({ bookingId, onClose, onChanged }) => {
     fineCost: "",
     otherCost: "",
   });
+  const [driverSearch, setDriverSearch] = useState("");
+  const [completeError, setCompleteError] = useState("");
+
+  const filteredDrivers = drivers.filter(
+    (rel) =>
+      rel.driver.name.toLowerCase().includes(driverSearch.toLowerCase()) ||
+      rel.driver.phone.includes(driverSearch),
+  );
+
+  const [actionLoading, setActionLoading] = useState(""); // e.g. "save" | "advance" | "complete" | "final" | "assign"
 
   useEffect(() => {
     fetchDetail();
@@ -54,57 +73,72 @@ const BookingDetailModal = ({ bookingId, onClose, onChanged }) => {
     }
   };
 
-  const handleSave = async () => {
+  const runAction = async (key, fn) => {
+    setActionLoading(key);
     try {
+      await fn();
+      await fetchDetail();
+      onChanged?.();
+    } catch (err) {
+      alert(err.response?.data?.message || "Something went wrong.");
+    } finally {
+      setActionLoading("");
+    }
+  };
+
+  const handleSave = () =>
+    runAction("save", async () => {
       await updateBooking(bookingId, form);
       setEditMode(false);
-      fetchDetail();
-      onChanged?.();
-    } catch (err) {
-      alert(err.response?.data?.message || "Unable to save.");
-    }
-  };
+    });
 
-  const handleAssignDriver = async (driverId) => {
-    try {
-      await assignDriver(bookingId, driverId);
-      fetchDetail();
-      onChanged?.();
-    } catch (err) {
-      alert(err.response?.data?.message || "Unable to assign driver.");
-    }
-  };
+  const handleAssignDriver = (driverId) =>
+    runAction("assign", () => assignDriver(bookingId, driverId));
 
-  const handleAddDriver = async () => {
+  const handleAddDriver = () => {
     if (!newDriver.name || !newDriver.phone) return;
-    try {
+    runAction("addDriver", async () => {
       const { data: driver } = await addDriver(user.id, newDriver);
-      await handleAssignDriver(driver.id);
+      await assignDriver(bookingId, driver.id);
       setNewDriver({ name: "", phone: "" });
-    } catch (err) {
-      alert(err.response?.data?.message || "Unable to add driver.");
-    }
+    });
   };
 
-  const handlePayAdvance = async () => {
-    try {
-      await payAdvance(bookingId);
-      fetchDetail();
-      onChanged?.();
-    } catch (err) {
-      alert(err.response?.data?.message || "Unable to pay advance.");
-    }
-  };
+  const handlePayAdvance = () =>
+    runAction("advance", () => payAdvance(bookingId));
 
-  const handleComplete = async () => {
-    try {
+  const handleComplete = () => {
+    const missing = Object.entries(costs).filter(
+      ([, v]) => v === "" || v === null,
+    );
+    if (missing.length > 0) {
+      setCompleteError(
+        "Please fill in every cost field (enter 0 if there was none).",
+      );
+      return;
+    }
+    setCompleteError("");
+    runAction("complete", async () => {
       await completeBooking(bookingId, costs);
       setShowCompleteForm(false);
-      fetchDetail();
-      onChanged?.();
-    } catch (err) {
-      alert(err.response?.data?.message || "Unable to complete trip.");
-    }
+    });
+  };
+
+  const handlePayFinal = () =>
+    runAction("final", () => payFinalAmount(bookingId));
+
+  const handleTripEvent = (event) =>
+    runAction("tripEvent", () => updateTripEvent(bookingId, event));
+
+  const canCancel =
+    ["CUSTOMER", "OWNER", "ADMIN"].includes(booking?.viewerRole) &&
+    !["ONGOING", "PAYMENT_PENDING", "COMPLETED", "CANCELLED"].includes(
+      booking?.status,
+    );
+
+  const handleCancel = () => {
+    if (!window.confirm("Cancel this booking? This can't be undone.")) return;
+    runAction("cancel", () => cancelBooking(bookingId));
   };
 
   if (!bookingId) return null;
@@ -165,12 +199,28 @@ const BookingDetailModal = ({ bookingId, onClose, onChanged }) => {
               <p>
                 <span className="text-slate-400">Advance:</span>{" "}
                 {booking.advancePaid != null
-                  ? `₹${booking.advancePaid} (${booking.payment?.status || "not yet paid"})`
-                  : "Not set"}
+                  ? `₹${booking.advancePaid}`
+                  : "Not set"}{" "}
+                {booking.payment?.status && `(${booking.payment.status})`}
+              </p>
+              <p>
+                <span className="text-slate-400">Paid so far:</span> ₹
+                {booking.payment?.amountPaid ?? 0}
               </p>
             </div>
 
-            {/* CUSTOMER: edit while pending + pay advance */}
+            {canCancel && (
+              <button
+                onClick={handleCancel}
+                disabled={!!actionLoading}
+                className="w-full rounded-xl border border-red-200 bg-red-50 py-2.5 text-sm font-semibold text-red-600 hover:bg-red-100 disabled:opacity-50"
+              >
+                {actionLoading === "cancel"
+                  ? "Cancelling..."
+                  : "Cancel Booking"}
+              </button>
+            )}
+
             {booking.viewerRole === "CUSTOMER" &&
               booking.status === "PENDING" &&
               (editMode ? (
@@ -202,15 +252,17 @@ const BookingDetailModal = ({ bookingId, onClose, onChanged }) => {
                   <div className="flex justify-end gap-2">
                     <button
                       onClick={() => setEditMode(false)}
-                      className="rounded-lg bg-slate-100 px-4 py-2 text-sm"
+                      disabled={!!actionLoading}
+                      className="rounded-lg bg-slate-100 px-4 py-2 text-sm disabled:opacity-50"
                     >
                       Cancel
                     </button>
                     <button
                       onClick={handleSave}
-                      className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white"
+                      disabled={!!actionLoading}
+                      className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
                     >
-                      Save
+                      {actionLoading === "save" ? "Saving..." : "Save"}
                     </button>
                   </div>
                 </div>
@@ -225,79 +277,100 @@ const BookingDetailModal = ({ bookingId, onClose, onChanged }) => {
 
             {booking.viewerRole === "CUSTOMER" &&
               booking.advancePaid != null &&
-              (!booking.payment || booking.payment.status === "PENDING") && (
+              booking.payment?.status !== "ADVANCE_PAID" &&
+              booking.payment?.status !== "COMPLETED" && (
                 <button
                   onClick={handlePayAdvance}
-                  className="w-full rounded-xl bg-green-600 py-2.5 text-sm font-semibold text-white hover:bg-green-700"
+                  disabled={!!actionLoading}
+                  className="w-full rounded-xl bg-green-600 py-2.5 text-sm font-semibold text-white hover:bg-green-700 disabled:opacity-50"
                 >
-                  Pay Advance (₹{booking.advancePaid})
+                  {actionLoading === "advance"
+                    ? "Processing..."
+                    : `Pay Advance (₹${booking.advancePaid})`}
                 </button>
               )}
 
-            {/* OWNER: edit fare/advance + assign driver + mark complete */}
             {booking.viewerRole === "OWNER" && (
               <div className="space-y-4 border-t border-slate-100 pt-4">
-                {editMode ? (
-                  <div className="space-y-3">
-                    <div className="grid grid-cols-2 gap-3">
-                      <input
-                        type="number"
-                        placeholder="Fare (₹)"
-                        value={form.estimatedFare}
-                        onChange={(e) =>
-                          setForm({ ...form, estimatedFare: e.target.value })
-                        }
-                        className="rounded-xl border border-slate-200 p-2.5 text-sm"
-                      />
-                      <input
-                        type="number"
-                        placeholder="Advance (₹)"
-                        value={form.advancePaid}
-                        onChange={(e) =>
-                          setForm({ ...form, advancePaid: e.target.value })
-                        }
-                        className="rounded-xl border border-slate-200 p-2.5 text-sm"
-                      />
+                {["PENDING", "DRIVER_ASSIGNED", "CONFIRMED"].includes(
+                  booking.status,
+                ) &&
+                  (editMode ? (
+                    <div className="space-y-3">
+                      <div className="grid grid-cols-2 gap-3">
+                        <input
+                          type="number"
+                          placeholder="Fare (₹)"
+                          value={form.estimatedFare}
+                          onChange={(e) =>
+                            setForm({ ...form, estimatedFare: e.target.value })
+                          }
+                          className="rounded-xl border border-slate-200 p-2.5 text-sm"
+                        />
+                        <input
+                          type="number"
+                          placeholder="Advance (₹)"
+                          value={form.advancePaid}
+                          onChange={(e) =>
+                            setForm({ ...form, advancePaid: e.target.value })
+                          }
+                          className="rounded-xl border border-slate-200 p-2.5 text-sm"
+                        />
+                      </div>
+                      <div className="flex justify-end gap-2">
+                        <button
+                          onClick={() => setEditMode(false)}
+                          disabled={!!actionLoading}
+                          className="rounded-lg bg-slate-100 px-4 py-2 text-sm disabled:opacity-50"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          onClick={handleSave}
+                          disabled={!!actionLoading}
+                          className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+                        >
+                          {actionLoading === "save" ? "Saving..." : "Save"}
+                        </button>
+                      </div>
                     </div>
-                    <div className="flex justify-end gap-2">
-                      <button
-                        onClick={() => setEditMode(false)}
-                        className="rounded-lg bg-slate-100 px-4 py-2 text-sm"
-                      >
-                        Cancel
-                      </button>
-                      <button
-                        onClick={handleSave}
-                        className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white"
-                      >
-                        Save
-                      </button>
-                    </div>
-                  </div>
-                ) : (
-                  <button
-                    onClick={() => setEditMode(true)}
-                    className="text-sm font-medium text-blue-600 hover:underline"
-                  >
-                    Edit fare / advance
-                  </button>
-                )}
+                  ) : (
+                    <button
+                      onClick={() => setEditMode(true)}
+                      className="text-sm font-medium text-blue-600 hover:underline"
+                    >
+                      Edit fare / advance
+                    </button>
+                  ))}
 
-                {booking.status !== "COMPLETED" && (
+                {["PENDING", "DRIVER_ASSIGNED", "CONFIRMED"].includes(
+                  booking.status,
+                ) && (
                   <div>
                     <label className="mb-1.5 block text-sm font-medium text-slate-700">
                       Assign Driver
                     </label>
+                    <input
+                      placeholder="Filter your linked drivers..."
+                      value={driverSearch}
+                      onChange={(e) => setDriverSearch(e.target.value)}
+                      className="mb-2 w-full rounded-lg border border-slate-200 p-2 text-xs"
+                    />
                     <select
                       onChange={(e) =>
                         e.target.value && handleAssignDriver(e.target.value)
                       }
+                      disabled={!!actionLoading}
                       defaultValue=""
-                      className="w-full rounded-xl border border-slate-200 p-2.5 text-sm"
+                      className="w-full rounded-xl border border-slate-200 p-2.5 text-sm disabled:opacity-50"
                     >
-                      <option value="">Select a driver...</option>
+                      <option value="">
+                        {actionLoading === "assign"
+                          ? "Assigning..."
+                          : "Select a driver..."}
+                      </option>
                       <option value={user.id}>Drive it myself</option>
-                      {drivers.map((rel) => (
+                      {filteredDrivers.map((rel) => (
                         <option key={rel.driver.id} value={rel.driver.id}>
                           {rel.driver.name} ({rel.driver.phone})
                         </option>
@@ -310,7 +383,8 @@ const BookingDetailModal = ({ bookingId, onClose, onChanged }) => {
                         onChange={(e) =>
                           setNewDriver({ ...newDriver, name: e.target.value })
                         }
-                        className="flex-1 rounded-lg border border-slate-200 p-2 text-xs"
+                        disabled={!!actionLoading}
+                        className="flex-1 rounded-lg border border-slate-200 p-2 text-xs disabled:opacity-50"
                       />
                       <input
                         placeholder="Phone"
@@ -318,29 +392,74 @@ const BookingDetailModal = ({ bookingId, onClose, onChanged }) => {
                         onChange={(e) =>
                           setNewDriver({ ...newDriver, phone: e.target.value })
                         }
-                        className="flex-1 rounded-lg border border-slate-200 p-2 text-xs"
+                        disabled={!!actionLoading}
+                        className="flex-1 rounded-lg border border-slate-200 p-2 text-xs disabled:opacity-50"
                       />
                       <button
                         onClick={handleAddDriver}
-                        className="rounded-lg bg-slate-800 px-3 py-2 text-xs font-semibold text-white"
+                        disabled={!!actionLoading}
+                        className="rounded-lg bg-slate-800 px-3 py-2 text-xs font-semibold text-white disabled:opacity-50"
                       >
-                        Add & Assign
+                        {actionLoading === "addDriver"
+                          ? "Adding..."
+                          : "Add & Assign"}
                       </button>
                     </div>
+                    <VerifiedDriverBrowser
+                      ownerId={user.id}
+                      onLinked={fetchDetail}
+                    />
                   </div>
                 )}
               </div>
             )}
 
-            {/* OWNER or DRIVER: mark completed */}
             {(booking.viewerRole === "OWNER" ||
               booking.viewerRole === "DRIVER") &&
-              booking.status !== "COMPLETED" &&
+              booking.status !== "COMPLETED" && (
+                <div className="flex flex-col gap-2">
+                  {!booking.driverArrivedPickupAt && (
+                    <button
+                      onClick={() => handleTripEvent("ARRIVED_PICKUP")}
+                      disabled={!!actionLoading}
+                      className="rounded-xl bg-blue-600 py-2.5 text-sm font-semibold text-white disabled:opacity-50"
+                    >
+                      {actionLoading === "tripEvent"
+                        ? "Updating..."
+                        : "I've Arrived at Pickup"}
+                    </button>
+                  )}
+                  {booking.driverArrivedPickupAt &&
+                    !booking.driverArrivedDestinationAt && (
+                      <button
+                        onClick={() => handleTripEvent("ARRIVED_DESTINATION")}
+                        disabled={!!actionLoading}
+                        className="rounded-xl bg-blue-600 py-2.5 text-sm font-semibold text-white disabled:opacity-50"
+                      >
+                        {actionLoading === "tripEvent"
+                          ? "Updating..."
+                          : "I've Arrived at Destination"}
+                      </button>
+                    )}
+                </div>
+              )}
+
+            {(booking.viewerRole === "OWNER" ||
+              booking.viewerRole === "DRIVER") &&
+              !booking.invoice &&
               booking.estimatedFare != null &&
-              (showCompleteForm ? (
+              (!booking.driverArrivedDestinationAt ? (
+                <div className="rounded-xl bg-amber-50 p-3 text-center text-sm text-amber-700">
+                  Mark "Arrived at Destination" (above) before you can complete
+                  this trip.
+                </div>
+              ) : showCompleteForm ? (
                 <div className="space-y-3 border-t border-slate-100 pt-4">
                   <p className="text-sm font-medium text-slate-700">
-                    Trip Costs
+                    Trip Costs{" "}
+                    <span className="font-normal text-slate-400">
+                      (required — enter 0 if none)
+                    </span>
                   </p>
                   <div className="grid grid-cols-2 gap-3">
                     {[
@@ -358,15 +477,22 @@ const BookingDetailModal = ({ bookingId, onClose, onChanged }) => {
                         onChange={(e) =>
                           setCosts({ ...costs, [k]: e.target.value })
                         }
-                        className="rounded-xl border border-slate-200 p-2.5 text-sm"
+                        disabled={!!actionLoading}
+                        className="rounded-xl border border-slate-200 p-2.5 text-sm disabled:opacity-50"
                       />
                     ))}
                   </div>
+                  {completeError && (
+                    <p className="text-sm text-red-500">{completeError}</p>
+                  )}
                   <button
                     onClick={handleComplete}
-                    className="w-full rounded-xl bg-green-600 py-2.5 text-sm font-semibold text-white hover:bg-green-700"
+                    disabled={!!actionLoading}
+                    className="w-full rounded-xl bg-green-600 py-2.5 text-sm font-semibold text-white hover:bg-green-700 disabled:opacity-50"
                   >
-                    Confirm Completion & Generate Invoice
+                    {actionLoading === "complete"
+                      ? "Completing..."
+                      : "Confirm Completion & Generate Invoice"}
                   </button>
                 </div>
               ) : (
@@ -378,9 +504,19 @@ const BookingDetailModal = ({ bookingId, onClose, onChanged }) => {
                 </button>
               ))}
 
-            {/* Everyone: invoice, once it exists */}
+            {booking.status === "PAYMENT_PENDING" && (
+              <p className="rounded-xl bg-amber-50 p-3 text-center text-sm font-medium text-amber-700">
+                Trip finished — awaiting customer payment to fully close this
+                booking.
+              </p>
+            )}
             {booking.invoice && (
-              <InvoiceView booking={booking} onUpdated={fetchDetail} />
+              <InvoiceView
+                booking={booking}
+                onUpdated={fetchDetail}
+                onPay={handlePayFinal}
+                payLoading={actionLoading === "final"}
+              />
             )}
           </div>
         )}
@@ -389,9 +525,71 @@ const BookingDetailModal = ({ bookingId, onClose, onChanged }) => {
   );
 };
 
-const InvoiceView = ({ booking, onUpdated }) => {
+const VerifiedDriverBrowser = ({ ownerId, onLinked }) => {
+  const [search, setSearch] = useState("");
+  const [results, setResults] = useState([]);
+  const [linking, setLinking] = useState("");
+
+  useEffect(() => {
+    const t = setTimeout(async () => {
+      if (search.length < 2) return setResults([]);
+      const { data } = await browseVerifiedDrivers(ownerId, search);
+      setResults(data);
+    }, 400);
+    return () => clearTimeout(t);
+  }, [search]);
+
+  const handleLink = async (driverId) => {
+    setLinking(driverId);
+    try {
+      await linkDriver(ownerId, driverId);
+      onLinked();
+      setSearch("");
+      setResults([]);
+    } catch (err) {
+      alert(err.response?.data?.message || "Unable to link driver.");
+    } finally {
+      setLinking("");
+    }
+  };
+
+  return (
+    <div className="mt-3">
+      <input
+        placeholder="Search verified drivers by name/phone..."
+        value={search}
+        onChange={(e) => setSearch(e.target.value)}
+        className="w-full rounded-lg border border-slate-200 p-2 text-xs"
+      />
+      {results.length > 0 && (
+        <div className="mt-2 space-y-1">
+          {results.map((d) => (
+            <div
+              key={d.id}
+              className="flex items-center justify-between rounded-lg bg-slate-50 p-2 text-xs"
+            >
+              <span>
+                {d.name} — {d.phone} {d.city && `(${d.city})`}
+              </span>
+              <button
+                onClick={() => handleLink(d.id)}
+                disabled={linking === d.id}
+                className="rounded bg-blue-600 px-2 py-1 font-semibold text-white disabled:opacity-50"
+              >
+                {linking === d.id ? "..." : "Link"}
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
+const InvoiceView = ({ booking, onUpdated, onPay, payLoading }) => {
   const [open, setOpen] = useState(false);
   const [edit, setEdit] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [form, setForm] = useState({
     fuelCost: booking.invoice.fuelCost,
     tollCost: booking.invoice.tollCost,
@@ -401,16 +599,20 @@ const InvoiceView = ({ booking, onUpdated }) => {
   });
   const canEdit =
     booking.viewerRole === "OWNER" || booking.viewerRole === "DRIVER";
+  const amountDue =
+    booking.invoice.totalAmount - (booking.payment?.amountPaid || 0);
+  const isFullyPaid = booking.payment?.status === "COMPLETED";
 
   const save = async () => {
+    setSaving(true);
     try {
-      const { updateInvoice: updateInvoiceService } =
-        await import("../../services/bookingServices");
-      await updateInvoiceService(booking.id, form);
+      await updateInvoice(booking.id, form);
       setEdit(false);
       onUpdated();
     } catch (err) {
       alert("Unable to update invoice.");
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -430,8 +632,8 @@ const InvoiceView = ({ booking, onUpdated }) => {
           </div>
           {["fuelCost", "tollCost", "parkingCost", "fineCost", "otherCost"].map(
             (k) => (
-              <div key={k} className="flex justify-between items-center">
-                <span className="text-slate-500 capitalize">
+              <div key={k} className="flex items-center justify-between">
+                <span className="capitalize text-slate-500">
                   {k.replace("Cost", "")}
                 </span>
                 {edit ? (
@@ -439,7 +641,8 @@ const InvoiceView = ({ booking, onUpdated }) => {
                     type="number"
                     value={form[k]}
                     onChange={(e) => setForm({ ...form, [k]: e.target.value })}
-                    className="w-24 rounded border border-slate-200 p-1 text-right text-xs"
+                    disabled={saving}
+                    className="w-24 rounded border border-slate-200 p-1 text-right text-xs disabled:opacity-50"
                   />
                 ) : (
                   <span>₹{booking.invoice[k]}</span>
@@ -456,14 +659,12 @@ const InvoiceView = ({ booking, onUpdated }) => {
             <span>₹{booking.invoice.totalAmount}</span>
           </div>
           <div className="flex justify-between text-green-700">
-            <span>Advance Paid</span>
-            <span>− ₹{booking.advancePaid || 0}</span>
+            <span>Paid So Far</span>
+            <span>− ₹{booking.payment?.amountPaid ?? 0}</span>
           </div>
           <div className="flex justify-between border-t border-slate-200 pt-2 font-bold text-red-600">
             <span>Amount Due</span>
-            <span>
-              ₹{booking.invoice.totalAmount - (booking.advancePaid || 0)}
-            </span>
+            <span>₹{amountDue}</span>
           </div>
 
           {canEdit &&
@@ -471,15 +672,17 @@ const InvoiceView = ({ booking, onUpdated }) => {
               <div className="flex justify-end gap-2 pt-2">
                 <button
                   onClick={() => setEdit(false)}
-                  className="rounded-lg bg-slate-200 px-3 py-1.5 text-xs"
+                  disabled={saving}
+                  className="rounded-lg bg-slate-200 px-3 py-1.5 text-xs disabled:opacity-50"
                 >
                   Cancel
                 </button>
                 <button
                   onClick={save}
-                  className="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white"
+                  disabled={saving}
+                  className="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50"
                 >
-                  Save
+                  {saving ? "Saving..." : "Save"}
                 </button>
               </div>
             ) : (
@@ -490,6 +693,23 @@ const InvoiceView = ({ booking, onUpdated }) => {
                 Edit costs
               </button>
             ))}
+
+          {booking.viewerRole === "CUSTOMER" &&
+            !isFullyPaid &&
+            amountDue > 0 && (
+              <button
+                onClick={onPay}
+                disabled={payLoading}
+                className="mt-2 w-full rounded-xl bg-green-600 py-2.5 text-sm font-semibold text-white hover:bg-green-700 disabled:opacity-50"
+              >
+                {payLoading ? "Processing Payment..." : `Pay ₹${amountDue}`}
+              </button>
+            )}
+          {isFullyPaid && (
+            <p className="mt-2 text-center text-sm font-semibold text-green-700">
+              Fully Paid
+            </p>
+          )}
         </div>
       )}
     </div>

@@ -9,6 +9,10 @@ import {
   payAdvance,
   completeBooking,
   updateInvoice,
+  payFinalAmount,
+  updateTripEvent,
+  getBookings,
+  cancelBooking,
 } from "../controllers/bookingController.js";
 import { attachUserIfPresent } from "../middleware/auth.js";
 
@@ -21,5 +25,9 @@ router.put("/:id/assign-driver", protect, assignDriverToBooking);
 router.put("/:id/pay-advance", protect, payAdvance);
 router.put("/:id/complete", protect, completeBooking);
 router.put("/:id/invoice", protect, updateInvoice);
+router.put("/:id/pay-final", protect, payFinalAmount);
+router.put("/:id/trip-event", protect, updateTripEvent);
+router.get("/", protect, getBookings);
+router.put("/:id/cancel", protect, cancelBooking);
 
 export default router;

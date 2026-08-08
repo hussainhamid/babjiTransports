@@ -83,11 +83,18 @@ model User {
   email String?
   role  Role
 
-  isVerified Boolean @default(false)
-  isActive   Boolean @default(true)
+  isVerified    Boolean @default(false)
+  driverFeePaid Boolean @default(false)
+  isActive      Boolean @default(true)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  city                String?
+  licenseNumber       String?
+  experienceYears     Int?
+  registrationFeePaid Boolean @default(false) // owner's ₹200 listing fee
+  driverVerified      Boolean @default(false)
 
   ownedVehicles  Vehicle[]
   assignedTrips  Booking[]     @relation("AssignedDriver")
@@ -127,6 +134,8 @@ enum BookingStatus {
 
   ONGOING
 
+  PAYMENT_PENDING
+
   COMPLETED
 
   CANCELLED
@@ -164,6 +173,10 @@ model Booking {
 
   isArchived Boolean @default(false)
 
+  driverArrivedPickupAt DateTime?
+
+  driverArrivedDestinationAt DateTime?
+
   createdAt DateTime @default(now())
 
   updatedAt DateTime @updatedAt
@@ -193,6 +206,8 @@ model Payment {
   driverAmount Float
 
   status String
+
+  amountPaid Float @default(0)
 
   isVoided Boolean @default(false)
 

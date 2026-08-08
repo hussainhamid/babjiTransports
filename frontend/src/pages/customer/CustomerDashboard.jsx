@@ -11,6 +11,7 @@ const statusGroups = [
   { key: "DRIVER_ASSIGNED", label: "Driver Assigned" },
   { key: "CONFIRMED", label: "Confirmed" },
   { key: "ONGOING", label: "Ongoing" },
+  { key: "PAYMENT_PENDING", label: "Awaiting Payment" }, // ← added
   { key: "COMPLETED", label: "Completed" },
   { key: "CANCELLED", label: "Cancelled" },
 ];

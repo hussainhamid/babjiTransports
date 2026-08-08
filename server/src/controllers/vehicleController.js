@@ -39,9 +39,10 @@ export async function createVehicle(req, res) {
         owner = await prisma.user.create({
           data: {
             name: req.body.ownerName,
-            phone: phoneNo,
+            phone: req.body.ownerPhone,
             role: "OWNER",
-          },
+            registrationFeePaid: true,
+          }, // simulated for now — real Razorpay charge replaces this later
         });
       }
 
@@ -81,16 +82,43 @@ export async function createVehicle(req, res) {
 
 export async function getLatestVehicles(req, res) {
   try {
-    const vehicles = await prisma.vehicle.findMany({
-      orderBy: {
-        createdAt: "desc",
-      },
-      where: {
-        isAvailable: true,
+    const page = Number(req.query.page) || 1;
+    const limit = Number(req.query.limit) || 9;
+    const skip = (page - 1) * limit;
+    const search = req.query.search;
+
+    const where = {
+      isAvailable: true,
+      ...(search && {
+        OR: [
+          { vehicleName: { contains: search, mode: "insensitive" } },
+          { brand: { contains: search, mode: "insensitive" } },
+          { model: { contains: search, mode: "insensitive" } },
+          { city: { contains: search, mode: "insensitive" } },
+          { owner: { name: { contains: search, mode: "insensitive" } } }, // ← added
+        ],
+      }),
+    };
+
+    const [vehicles, total] = await Promise.all([
+      prisma.vehicle.findMany({
+        where,
+        orderBy: { createdAt: "desc" },
+        skip,
+        take: limit,
+      }),
+      prisma.vehicle.count({ where }),
+    ]);
+
+    res.status(200).json({
+      vehicles,
+      pagination: {
+        total,
+        currentPage: page,
+        totalPages: Math.ceil(total / limit),
+        hasMore: page * limit < total,
       },
     });
-
-    res.status(200).json(vehicles);
   } catch (err) {
     console.log(err);
     res.status(500).json({ message: "unable to get vehicles" });
@@ -104,10 +132,10 @@ export async function getVehicleById(req, res) {
       include: { owner: { select: { id: true, name: true, phone: true } } },
     });
     if (!vehicle) return res.status(404).json({ message: "Vehicle not found" });
-    return res.status(200).json(vehicle);
+    res.status(200).json(vehicle);
   } catch (err) {
     console.error(err);
-    return res.status(500).json({ message: "Unable to fetch vehicle" });
+    res.status(500).json({ message: "Unable to fetch vehicle" });
   }
 }
 

@@ -117,7 +117,7 @@ const Booking = () => {
               </p>
             </div>
 
-            {(!user || user.role !== "CUSTOMER") && (
+            {!user && ( // was: (!user || user.role !== "CUSTOMER")
               <div className="grid grid-cols-2 gap-4 border-t border-slate-100 pt-4">
                 <input
                   name="customerName"

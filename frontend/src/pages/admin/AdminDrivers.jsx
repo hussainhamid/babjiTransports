@@ -119,6 +119,7 @@ const AdminDrivers = () => {
                 <th className="px-6 py-3 font-medium">Phone</th>
                 <th className="px-6 py-3 font-medium">Completed Trips</th>
                 <th className="px-6 py-3 font-medium">Status</th>
+                <th className="px-6 py-3 font-medium">Primary Role</th>
               </tr>
             </thead>
             <tbody>
@@ -139,6 +140,11 @@ const AdminDrivers = () => {
                     <Badge status={d.isActive ? "ACTIVE" : "INACTIVE"}>
                       {d.isActive ? "Active" : "Inactive"}
                     </Badge>
+                  </td>
+                  <td className="px-6 py-3.5">
+                    <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">
+                      {d.role}
+                    </span>
                   </td>
                 </tr>
               ))}
@@ -228,6 +234,11 @@ const AdminDrivers = () => {
               {d._count?.assignedTrips ?? 0}
             </p>
             <p className="text-xs text-slate-500">Completed Trips</p>
+            <td className="px-6 py-3.5">
+              <Badge status={d.driverFeePaid ? "ACTIVE" : "INACTIVE"}>
+                {d.driverFeePaid ? "Fee Paid" : "Not Paid"}
+              </Badge>
+            </td>
           </div>
         )}
       />

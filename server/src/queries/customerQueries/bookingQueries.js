@@ -58,21 +58,16 @@ export async function getCustomerDashboardStats(customerId) {
       }),
     ]);
 
-  const spendResult = await prisma.booking.aggregate({
-    where: { customerId, status: "COMPLETED" },
-    _sum: {
-      advancePaid: true,
-      remainingAmount: true,
-    },
+  const spendResult = await prisma.payment.aggregate({
+    where: { booking: { customerId } },
+    _sum: { amountPaid: true },
   });
 
   return {
     totalBookings,
     activeBookings,
     completedBookings,
-    totalSpent:
-      (spendResult._sum.advancePaid || 0) +
-      (spendResult._sum.remainingAmount || 0),
+    totalSpent: spendResult._sum.amountPaid || 0,
     recentBookings,
   };
 }

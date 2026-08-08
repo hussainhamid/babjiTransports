@@ -21,27 +21,25 @@ export async function createBooking(req, res) {
           "vehicleId, pickupLocation, destination and bookingDate are required",
       });
     }
-
     let customer;
     let token;
 
-    if (req.user && req.user.role === "CUSTOMER") {
+    if (req.user) {
+      // Trust ANY logged-in user, regardless of role — owner, driver, admin, or customer.
       customer = await prisma.user.findUnique({ where: { id: req.user.id } });
       if (!customer)
-        return res.status(404).json({ message: "Customer account not found" });
+        return res.status(404).json({ message: "Account not found" });
     } else {
-      // Anonymous, or logged in as a non-customer role (owner/driver/admin browsing as a guest booker)
       if (!customerName || !customerPhone) {
         return res
           .status(400)
           .json({ message: "customerName and customerPhone are required" });
       }
-      customer = await prisma.user.findUnique({
-        where: { phone: customerPhone },
-      });
+      const normalized = normalizePhone(customerPhone);
+      customer = await prisma.user.findUnique({ where: { phone: normalized } });
       if (!customer) {
         customer = await prisma.user.create({
-          data: { name: customerName, phone: customerPhone, role: "CUSTOMER" },
+          data: { name: customerName, phone: normalized, role: "CUSTOMER" },
         });
       }
       token = generateToken(customer);
@@ -69,14 +67,15 @@ export async function createBooking(req, res) {
 }
 
 // Figures out how the requesting user relates to this booking — used to gate every action below.
-function getBookingRole(userId, booking) {
+function getBookingRole(userId, userRole, booking) {
+  if (userRole === "ADMIN") return "ADMIN";
   if (userId === booking.customerId) return "CUSTOMER";
   if (userId === booking.vehicle.ownerId) return "OWNER";
   if (userId === booking.driverId) return "DRIVER";
   return null;
 }
 
-async function loadBookingWithAccess(bookingId, userId) {
+async function loadBookingWithAccess(bookingId, userId, userRole) {
   const booking = await prisma.booking.findUnique({
     where: { id: bookingId },
     include: {
@@ -88,7 +87,7 @@ async function loadBookingWithAccess(bookingId, userId) {
     },
   });
   if (!booking) return { error: "NOT_FOUND" };
-  const role = getBookingRole(userId, booking);
+  const role = getBookingRole(userId, userRole, booking); // ← now takes userRole
   if (!role) return { error: "FORBIDDEN" };
   return { booking, role };
 }
@@ -98,6 +97,7 @@ export async function getBookingDetail(req, res) {
     const { booking, role, error } = await loadBookingWithAccess(
       req.params.id,
       req.user.id,
+      req.user.role,
     );
     if (error === "NOT_FOUND")
       return res.status(404).json({ message: "Booking not found" });
@@ -117,6 +117,7 @@ export async function updateBookingDetail(req, res) {
     const { booking, role, error } = await loadBookingWithAccess(
       req.params.id,
       req.user.id,
+      req.user.role,
     );
     if (error === "NOT_FOUND")
       return res.status(404).json({ message: "Booking not found" });
@@ -194,6 +195,7 @@ export async function assignDriverToBooking(req, res) {
     const { booking, role, error } = await loadBookingWithAccess(
       req.params.id,
       req.user.id,
+      req.user.role,
     );
     if (error === "NOT_FOUND")
       return res.status(404).json({ message: "Booking not found" });
@@ -241,6 +243,7 @@ export async function payAdvance(req, res) {
     const { booking, role, error } = await loadBookingWithAccess(
       req.params.id,
       req.user.id,
+      req.user.role,
     );
     if (error === "NOT_FOUND")
       return res.status(404).json({ message: "Booking not found" });
@@ -254,19 +257,25 @@ export async function payAdvance(req, res) {
         .status(400)
         .json({ message: "The owner hasn't set an advance amount yet" });
     }
-    if (booking.payment && booking.payment.status !== "PENDING") {
-      return res.status(400).json({
-        message: "Advance has already been recorded for this booking",
-      });
+    if (
+      booking.payment?.status === "ADVANCE_PAID" ||
+      booking.payment?.status === "COMPLETED"
+    ) {
+      return res.status(400).json({ message: "Advance has already been paid" });
     }
 
     const payment = await prisma.payment.upsert({
       where: { bookingId: booking.id },
-      update: { advanceAmount: booking.advancePaid, status: "ADVANCE_PAID" },
+      update: {
+        advanceAmount: booking.advancePaid,
+        amountPaid: { increment: booking.advancePaid },
+        status: "ADVANCE_PAID",
+      },
       create: {
         bookingId: booking.id,
         advanceAmount: booking.advancePaid,
-        companyCommission: 0, // filled in for real once the trip completes
+        amountPaid: booking.advancePaid,
+        companyCommission: 0,
         driverAmount: 0,
         status: "ADVANCE_PAID",
       },
@@ -287,6 +296,7 @@ export async function completeBooking(req, res) {
     const { booking, role, error } = await loadBookingWithAccess(
       req.params.id,
       req.user.id,
+      req.user.role,
     );
     if (error === "NOT_FOUND")
       return res.status(404).json({ message: "Booking not found" });
@@ -295,18 +305,43 @@ export async function completeBooking(req, res) {
         message: "Only the owner or assigned driver can complete this trip",
       });
     }
+
     if (booking.estimatedFare == null) {
       return res
         .status(400)
         .json({ message: "This booking has no fare set yet" });
     }
+    if (!booking.driverArrivedDestinationAt) {
+      return res.status(400).json({
+        message: "Mark 'Arrived at Destination' before completing the trip.",
+      });
+    }
 
-    const fuelCost = Number(req.body.fuelCost) || 0;
-    const tollCost = Number(req.body.tollCost) || 0;
-    const parkingCost = Number(req.body.parkingCost) || 0;
-    const fineCost = Number(req.body.fineCost) || 0;
-    const otherCost = Number(req.body.otherCost) || 0;
+    // All five cost fields must be explicitly provided — "0" is fine, missing/blank is not.
+    const costFields = [
+      "fuelCost",
+      "tollCost",
+      "parkingCost",
+      "fineCost",
+      "otherCost",
+    ];
+    for (const field of costFields) {
+      if (
+        req.body[field] === undefined ||
+        req.body[field] === null ||
+        req.body[field] === ""
+      ) {
+        return res.status(400).json({
+          message: `${field} is required — enter 0 if there was none`,
+        });
+      }
+    }
 
+    const fuelCost = Number(req.body.fuelCost);
+    const tollCost = Number(req.body.tollCost);
+    const parkingCost = Number(req.body.parkingCost);
+    const fineCost = Number(req.body.fineCost);
+    const otherCost = Number(req.body.otherCost);
     const extras = fuelCost + tollCost + parkingCost + fineCost + otherCost;
     const companyCommission =
       Math.round(booking.estimatedFare * COMMISSION_RATE * 100) / 100;
@@ -316,8 +351,8 @@ export async function completeBooking(req, res) {
     const [updatedBooking, invoice, payment] = await prisma.$transaction([
       prisma.booking.update({
         where: { id: booking.id },
-        data: { status: "COMPLETED" },
-      }),
+        data: { status: "PAYMENT_PENDING" },
+      }), // NOT "COMPLETED" — that only happens once paid
       prisma.invoice.upsert({
         where: { bookingId: booking.id },
         update: {
@@ -340,19 +375,15 @@ export async function completeBooking(req, res) {
       }),
       prisma.payment.upsert({
         where: { bookingId: booking.id },
-        update: {
-          finalAmount: totalAmount,
-          companyCommission,
-          driverAmount,
-          status: "COMPLETED",
-        },
+        update: { finalAmount: totalAmount, companyCommission, driverAmount },
         create: {
           bookingId: booking.id,
           advanceAmount: booking.advancePaid || 0,
+          amountPaid: 0,
           finalAmount: totalAmount,
           companyCommission,
           driverAmount,
-          status: "COMPLETED",
+          status: "PENDING",
         },
       }),
     ]);
@@ -364,11 +395,57 @@ export async function completeBooking(req, res) {
   }
 }
 
+export async function payFinalAmount(req, res) {
+  try {
+    const { booking, role, error } = await loadBookingWithAccess(
+      req.params.id,
+      req.user.id,
+      req.user.role,
+    );
+    if (error === "NOT_FOUND")
+      return res.status(404).json({ message: "Booking not found" });
+    if (error === "FORBIDDEN" || role !== "CUSTOMER") {
+      return res
+        .status(403)
+        .json({ message: "Only the customer can pay the invoice" });
+    }
+    if (!booking.invoice || !booking.payment) {
+      return res.status(400).json({
+        message: "No invoice exists yet — the trip must be completed first",
+      });
+    }
+    if (booking.payment.status === "COMPLETED") {
+      return res
+        .status(400)
+        .json({ message: "This invoice is already fully paid" });
+    }
+
+    const amountDue = booking.invoice.totalAmount - booking.payment.amountPaid;
+
+    const [payment, updatedBooking] = await prisma.$transaction([
+      prisma.payment.update({
+        where: { bookingId: booking.id },
+        data: { amountPaid: { increment: amountDue }, status: "COMPLETED" },
+      }),
+      prisma.booking.update({
+        where: { id: booking.id },
+        data: { status: "COMPLETED" }, // ← the real "trip fully closed" trigger
+      }),
+    ]);
+
+    return res.status(200).json({ payment, booking: updatedBooking });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ message: "Unable to process payment" });
+  }
+}
+
 export async function updateInvoice(req, res) {
   try {
     const { booking, role, error } = await loadBookingWithAccess(
       req.params.id,
       req.user.id,
+      req.user.role,
     );
     if (error === "NOT_FOUND")
       return res.status(404).json({ message: "Booking not found" });
@@ -421,8 +498,128 @@ export async function updateInvoice(req, res) {
   }
 }
 
-export async function cancelBooking(req, res) {}
+export async function updateTripEvent(req, res) {
+  try {
+    const { booking, role, error } = await loadBookingWithAccess(
+      req.params.id,
+      req.user.id,
+      req.user.role,
+    );
+    if (error === "NOT_FOUND")
+      return res.status(404).json({ message: "Booking not found" });
+    if (error === "FORBIDDEN" || (role !== "DRIVER" && role !== "OWNER")) {
+      return res
+        .status(403)
+        .json({ message: "Only the assigned driver can update trip progress" });
+    }
 
-export async function getBookings(req, res) {}
+    const { event } = req.body;
+    const data = {};
 
-export async function getBookingById(req, res) {}
+    if (event === "ARRIVED_PICKUP") {
+      data.driverArrivedPickupAt = new Date();
+      data.status = "ONGOING";
+    } else if (event === "ARRIVED_DESTINATION") {
+      data.driverArrivedDestinationAt = new Date();
+    } else {
+      return res.status(400).json({ message: "Invalid event" });
+    }
+
+    const updated = await prisma.booking.update({
+      where: { id: booking.id },
+      data,
+    });
+    return res.status(200).json(updated);
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ message: "Unable to update trip status" });
+  }
+}
+
+export async function cancelBooking(req, res) {
+  try {
+    const { booking, role, error } = await loadBookingWithAccess(
+      req.params.id,
+      req.user.id,
+      req.user.role,
+    );
+    if (error === "NOT_FOUND")
+      return res.status(404).json({ message: "Booking not found" });
+    if (error === "FORBIDDEN")
+      return res
+        .status(403)
+        .json({ message: "You don't have access to this booking" });
+
+    if (!["CUSTOMER", "OWNER", "ADMIN"].includes(role)) {
+      return res
+        .status(403)
+        .json({ message: "Drivers cannot cancel a booking" });
+    }
+    if (
+      ["ONGOING", "PAYMENT_PENDING", "COMPLETED", "CANCELLED"].includes(
+        booking.status,
+      )
+    ) {
+      return res.status(400).json({
+        message: `A booking that is ${booking.status.toLowerCase().replace("_", " ")} can no longer be cancelled`,
+      });
+    }
+
+    const updated = await prisma.booking.update({
+      where: { id: booking.id },
+      data: { status: "CANCELLED" },
+    });
+    return res.status(200).json(updated);
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ message: "Unable to cancel booking" });
+  }
+}
+
+export async function getBookings(req, res) {
+  try {
+    const { id, role } = req.user;
+    const page = Number(req.query.page) || 1;
+    const limit = Number(req.query.limit) || 50;
+    const skip = (page - 1) * limit;
+
+    let where = {};
+    if (role === "CUSTOMER") where = { customerId: id };
+    else if (role === "DRIVER") where = { driverId: id };
+    else if (role === "OWNER") where = { vehicle: { ownerId: id } };
+    // ADMIN: no filter at all — sees every booking on the platform
+
+    const [bookings, total] = await Promise.all([
+      prisma.booking.findMany({
+        where,
+        skip,
+        take: limit,
+        orderBy: { createdAt: "desc" },
+        include: {
+          customer: { select: { id: true, name: true, phone: true } },
+          driver: { select: { id: true, name: true, phone: true } },
+          vehicle: {
+            include: {
+              owner: { select: { id: true, name: true, phone: true } },
+            },
+          },
+          payment: true,
+        },
+      }),
+      prisma.booking.count({ where }),
+    ]);
+
+    return res.status(200).json({
+      bookings,
+      pagination: {
+        total,
+        currentPage: page,
+        totalPages: Math.ceil(total / limit),
+        limit,
+      },
+    });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ message: "Unable to fetch bookings" });
+  }
+}

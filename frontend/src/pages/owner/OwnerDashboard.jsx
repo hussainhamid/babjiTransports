@@ -13,6 +13,7 @@ const statusGroups = [
   { key: "DRIVER_ASSIGNED", label: "Driver Assigned" },
   { key: "CONFIRMED", label: "Confirmed" },
   { key: "ONGOING", label: "Ongoing" },
+  { key: "PAYMENT_PENDING", label: "Awaiting Payment" }, // ← added
   { key: "COMPLETED", label: "Completed" },
   { key: "CANCELLED", label: "Cancelled" },
 ];
@@ -54,15 +55,20 @@ const OwnerDashboard = () => {
       [bookingId]: { ...prev[bookingId], [field]: value },
     }));
 
+  const [quotingId, setQuotingId] = useState(null);
+
   const handleQuote = async (bookingId) => {
     const form = quoteForms[bookingId];
     if (!form?.estimatedFare) return alert("Enter a fare before confirming.");
+    setQuotingId(bookingId);
     try {
       await quoteBookingFare(user.id, bookingId, form);
       fetchAll();
     } catch (err) {
       console.error(err);
       alert("Unable to update booking.");
+    } finally {
+      setQuotingId(null);
     }
   };
 
@@ -180,9 +186,12 @@ const OwnerDashboard = () => {
                       {group.key === "PENDING" ? (
                         <button
                           onClick={() => handleQuote(b.id)}
-                          className="rounded-xl bg-blue-600 px-5 py-2 text-sm font-semibold text-white hover:bg-blue-700"
+                          disabled={quotingId === b.id}
+                          className="rounded-xl bg-blue-600 px-5 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
                         >
-                          Confirm & Send Quote
+                          {quotingId === b.id
+                            ? "Sending..."
+                            : "Confirm & Send Quote"}
                         </button>
                       ) : (
                         <span />

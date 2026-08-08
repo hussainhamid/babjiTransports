@@ -236,7 +236,12 @@ export async function createDriver(req, res) {
 
 export async function updateDriver(req, res) {
   try {
-    const driver = await updateDriverQuery(req.params.id, req.body);
+    const { name, email, isVerified } = req.body; // isVerified now admin-editable
+    const driver = await updateDriverQuery(req.params.id, {
+      name,
+      email,
+      isVerified,
+    });
     return res.status(200).json(driver);
   } catch (err) {
     console.error(err);
@@ -372,12 +377,10 @@ export async function createBooking(req, res) {
       !destination ||
       !bookingDate
     ) {
-      return res
-        .status(400)
-        .json({
-          message:
-            "customerId, vehicleId, pickupLocation, destination and bookingDate are required",
-        });
+      return res.status(400).json({
+        message:
+          "customerId, vehicleId, pickupLocation, destination and bookingDate are required",
+      });
     }
 
     const booking = await createBookingQuery(req.body);

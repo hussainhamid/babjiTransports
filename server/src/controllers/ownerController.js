@@ -182,7 +182,40 @@ export async function addDriver(req, res) {
     const driver = await createAndAssignDriver(req.params.ownerId, req.body);
     return res.status(201).json(driver);
   } catch (err) {
+    if (err.message === "NOT_VERIFIED")
+      return res
+        .status(400)
+        .json({ message: "This driver hasn't been verified by admin yet." });
     console.error(err);
     return res.status(500).json({ message: "Unable to add driver" });
+  }
+}
+
+export async function browseVerifiedDrivers(req, res) {
+  try {
+    const drivers = await getAvailableVerifiedDrivers(
+      req.params.ownerId,
+      req.query.search,
+    );
+    return res.status(200).json(drivers);
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ message: "Unable to fetch drivers" });
+  }
+}
+
+export async function linkDriver(req, res) {
+  try {
+    await linkVerifiedDriver(req.params.ownerId, req.body.driverId);
+    return res.status(200).json({ message: "Driver linked" });
+  } catch (err) {
+    if (err.message === "NOT_PAID")
+      return res
+        .status(400)
+        .json({
+          message: "This driver hasn't paid the driver registration fee yet.",
+        });
+    console.error(err);
+    return res.status(500).json({ message: "Unable to link driver" });
   }
 }

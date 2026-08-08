@@ -34,5 +34,10 @@ export async function updateTripStatus(driverId, bookingId, status) {
   const booking = await prisma.booking.findUnique({ where: { id: bookingId } });
   if (!booking) throw new Error("NOT_FOUND");
   if (booking.driverId !== driverId) throw new Error("FORBIDDEN");
+
+  // Only "start the trip" is allowed here — completion MUST go through
+  // completeBooking (creates invoice) → payFinalAmount (customer pays), never a direct status jump.
+  if (status !== "ONGOING") throw new Error("INVALID_TRANSITION");
+
   return prisma.booking.update({ where: { id: bookingId }, data: { status } });
 }

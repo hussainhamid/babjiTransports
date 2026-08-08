@@ -8,7 +8,7 @@ const AddVehicle = () => {
           <h1 className="text-5xl font-bold">List Your Vehicle</h1>
 
           <p className="mt-4 text-lg text-blue-100 max-w-2xl">
-            Join Babji Transports and start receiving bookings from customers in
+            Join G9 Travels Co and start receiving bookings from customers in
             your city.
           </p>
         </div>

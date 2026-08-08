@@ -4,6 +4,6 @@ export function generateToken(user) {
   return jwt.sign(
     { id: user.id, role: user.role, phone: user.phone },
     process.env.JWT_SECRET,
-    { expiresIn: "30d" },
+    { expiresIn: "7d" },
   );
 }

@@ -1,5 +1,13 @@
 import { useEffect, useState } from "react";
-import { Users, UserCog, Car, ClipboardList, CreditCard } from "lucide-react";
+import {
+  Users,
+  UserCog,
+  Car,
+  ClipboardList,
+  CreditCard,
+  TrendingUp,
+  Percent,
+} from "lucide-react";
 import { getAdminDashboard } from "../../services/adminServices";
 import { StatCard } from "../../components/common/Card";
 import Loader from "../../components/common/Loader";
@@ -43,6 +51,18 @@ const AdminDashboard = () => {
       <p className="mt-1 text-slate-500">Overview of the whole platform.</p>
 
       <div className="mt-8 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+        <StatCard
+          icon={TrendingUp}
+          label="Total Earnings"
+          value={`₹${stats.totalEarnings}`}
+          tone="green"
+        />
+        <StatCard
+          icon={Percent}
+          label="Commission Earned"
+          value={`₹${stats.totalCommission}`}
+          tone="purple"
+        />
         <StatCard
           icon={Users}
           label="Customers"

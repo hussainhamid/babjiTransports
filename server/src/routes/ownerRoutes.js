@@ -14,6 +14,8 @@ import {
   getBookingsForOwner,
   quoteBookingFare,
   addDriver,
+  browseVerifiedDrivers,
+  linkDriver,
 } from "../controllers/ownerController.js";
 
 const router = Router();
@@ -36,6 +38,8 @@ router.post(
 );
 router.get("/:ownerId/bookings", getBookingsForOwner);
 router.post("/:ownerId/drivers", addDriver);
-router.post("/:ownerId/bookings/:bookingId/quote", quoteBookingFare);
+router.put("/:ownerId/bookings/:bookingId/quote", quoteBookingFare);
+router.get("/:ownerId/available-drivers", browseVerifiedDrivers);
+router.post("/:ownerId/drivers/link", linkDriver);
 
 export default router;

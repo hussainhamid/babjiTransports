@@ -24,6 +24,7 @@ const VehicleForm = () => {
   const { user, setSession } = useAuth();
   const [formData, setFormData] = useState(initialState);
   const [loading, setLoading] = useState(false);
+  const [feeAgreed, setFeeAgreed] = useState(false);
 
   const handleChange = (e) => {
     const { name, value, files } = e.target;
@@ -280,6 +281,20 @@ const VehicleForm = () => {
               value={formData.ownerPhone}
               onChange={handleChange}
             />
+          </div>
+          <div className="mt-4 rounded-xl bg-amber-50 p-4">
+            <p className="text-sm font-semibold text-amber-800">
+              ₹200 one-time owner registration fee applies.
+            </p>
+            <label className="mt-2 flex items-center gap-2 text-sm text-amber-700">
+              <input
+                type="checkbox"
+                required
+                checked={feeAgreed}
+                onChange={(e) => setFeeAgreed(e.target.checked)}
+              />
+              I agree to pay the ₹200 registration fee to list my vehicle.
+            </label>
           </div>
         </div>
       )}

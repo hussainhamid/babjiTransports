@@ -8,13 +8,20 @@ export async function getDashboardStats() {
     totalVehicles,
     totalBookings,
     totalPayments,
+    earningsResult,
+    commissionResult,
   ] = await Promise.all([
-    prisma.user.count({ where: { role: "DRIVER" } }),
+    prisma.user.count({ where: { driverFeePaid: true } }), // ← was role: "DRIVER"
     prisma.user.count({ where: { role: "CUSTOMER" } }),
     prisma.user.count({ where: { role: "OWNER" } }),
     prisma.vehicle.count(),
     prisma.booking.count(),
     prisma.payment.count(),
+    prisma.payment.aggregate({ _sum: { amountPaid: true } }),
+    prisma.payment.aggregate({
+      where: { finalAmount: { not: null } },
+      _sum: { companyCommission: true },
+    }),
   ]);
 
   return {
@@ -24,5 +31,7 @@ export async function getDashboardStats() {
     totalVehicles,
     totalBookings,
     totalPayments,
+    totalEarnings: earningsResult._sum.amountPaid || 0,
+    totalCommission: commissionResult._sum.companyCommission || 0,
   };
 }

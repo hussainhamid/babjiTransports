@@ -6,6 +6,7 @@ import {
   getMyVehicles,
   getMyBookings,
   updateMyTripStatus,
+  applyAsDriver,
 } from "../controllers/driverController.js";
 
 const router = Router();
@@ -19,5 +20,6 @@ router.put(
   authorize("DRIVER"),
   updateMyTripStatus,
 );
+router.post("/apply", applyAsDriver);
 
 export default router;

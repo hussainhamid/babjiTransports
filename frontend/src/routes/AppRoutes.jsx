@@ -17,6 +17,9 @@ import OwnerDashboard from "../pages/owner/OwnerDashboard";
 import PublicLayout from "../layouts/PublicLayout";
 import DriverDashboard from "../pages/driver/DriverDashboard";
 import ProtectedRoute from "../components/ProtectedRoute";
+import Contact from "../pages/Contact";
+import BecomeDriver from "../pages/BecomeDriver";
+import Tracking from "../pages/Tracking";
 
 const AppRoutes = () => {
   return (
@@ -30,6 +33,9 @@ const AppRoutes = () => {
           <Route path="/customer" element={<CustomerDashboard />} />
           <Route path="/owner" element={<OwnerDashboard />} />
           <Route path="/driver-dashboard" element={<DriverDashboard />} />
+          <Route path="/contact" element={<Contact />} />
+          <Route path="/driver" element={<BecomeDriver />} />
+          <Route path="/tracking" element={<Tracking />} />{" "}
         </Route>
 
         <Route

@@ -5,17 +5,7 @@ import {
   getDriverBookings,
   updateTripStatus,
 } from "../../services/driverServices";
-
-const nextStatus = {
-  DRIVER_ASSIGNED: "ONGOING",
-  CONFIRMED: "ONGOING",
-  ONGOING: "COMPLETED",
-};
-const nextLabel = {
-  DRIVER_ASSIGNED: "Start Trip",
-  CONFIRMED: "Start Trip",
-  ONGOING: "Mark Completed",
-};
+import BookingDetailModal from "../../components/booking/BookingDetailModal";
 
 const DriverDashboard = () => {
   const { user } = useAuth();
@@ -23,6 +13,8 @@ const DriverDashboard = () => {
   const [bookings, setBookings] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [selectedBookingId, setSelectedBookingId] = useState(null);
+  const [startingId, setStartingId] = useState(null);
 
   useEffect(() => {
     fetchAll();
@@ -46,13 +38,15 @@ const DriverDashboard = () => {
     }
   };
 
-  const handleAdvance = async (bookingId, currentStatus) => {
+  const handleStartTrip = async (bookingId) => {
+    setStartingId(bookingId);
     try {
-      await updateTripStatus(bookingId, nextStatus[currentStatus]);
+      await updateTripStatus(bookingId, "ONGOING");
       fetchAll();
     } catch (err) {
-      console.error(err);
-      alert("Unable to update trip status.");
+      alert(err.response?.data?.message || "Unable to start trip.");
+    } finally {
+      setStartingId(null);
     }
   };
 
@@ -109,22 +103,38 @@ const DriverDashboard = () => {
                 </p>
                 <div className="mt-3 flex items-center justify-between">
                   <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">
-                    {b.status}
+                    {b.status.replace("_", " ")}
                   </span>
-                  {nextStatus[b.status] && (
+                  <div className="flex gap-2">
+                    {(b.status === "DRIVER_ASSIGNED" ||
+                      b.status === "CONFIRMED") && (
+                      <button
+                        onClick={() => handleStartTrip(b.id)}
+                        disabled={startingId === b.id}
+                        className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
+                      >
+                        {startingId === b.id ? "Starting..." : "Start Trip"}
+                      </button>
+                    )}
                     <button
-                      onClick={() => handleAdvance(b.id, b.status)}
-                      className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700"
+                      onClick={() => setSelectedBookingId(b.id)}
+                      className="rounded-lg bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-200"
                     >
-                      {nextLabel[b.status]}
+                      View / Complete Trip
                     </button>
-                  )}
+                  </div>
                 </div>
               </div>
             ))
           )}
         </div>
       </div>
+
+      <BookingDetailModal
+        bookingId={selectedBookingId}
+        onClose={() => setSelectedBookingId(null)}
+        onChanged={fetchAll}
+      />
     </div>
   );
 };

@@ -9,6 +9,7 @@ const statusStyles = {
   INACTIVE: "bg-slate-100 text-slate-500",
   VERIFIED: "bg-green-50 text-green-700",
   UNVERIFIED: "bg-amber-50 text-amber-700",
+  PAYMENT_PENDING: "bg-orange-50 text-orange-700",
 };
 
 const Badge = ({ children, status }) => {
